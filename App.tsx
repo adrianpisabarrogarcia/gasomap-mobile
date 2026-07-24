@@ -13,7 +13,6 @@ import {
   Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,6 +29,7 @@ import {
   FUEL_TYPES
 } from './src/utils/helpers';
 import Header from './src/components/Header';
+import Map from './src/components/Map';
 import PreviewCard from './src/components/PreviewCard';
 import StationModal from './src/components/StationModal';
 
@@ -40,7 +40,7 @@ const SHEET_MID_HEIGHT = 360;
 
 function AppContent() {
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
 
   // States
   const [loading, setLoading] = useState(true);
@@ -349,49 +349,15 @@ function AppContent() {
       <View style={[styles.statusBarCover, { height: insets.top }]} />
 
       {/* Map View */}
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        customMapStyle={MAP_DARK_STYLE}
-        initialRegion={{
-          latitude: currentCoords.latitude,
-          longitude: currentCoords.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
+      <Map
+        mapRef={mapRef}
+        currentCoords={currentCoords}
+        filteredStations={filteredStations}
+        onMarkerPress={(station) => {
+          triggerHaptic();
+          setSelectedStationPreview(station);
         }}
-      >
-        {/* User Marker */}
-        <Marker coordinate={{ latitude: currentCoords.latitude, longitude: currentCoords.longitude }}>
-          <View style={styles.userMarkerContainer}>
-            <View style={styles.userMarkerPulse} />
-            <View style={styles.userMarkerCore} />
-          </View>
-        </Marker>
-
-        {/* Gas Stations Markers */}
-        {filteredStations.map(station => {
-          const stylesInfo = getPriceLevelStyles(station.priceLevel);
-          return (
-            <Marker
-              key={station.id}
-              coordinate={{ latitude: station.latitude, longitude: station.longitude }}
-              onPress={() => {
-                triggerHaptic();
-                centerMap(station.latitude, station.longitude, 16);
-                setSelectedStationPreview(station);
-              }}
-            >
-              <View style={[styles.markerBadge, { borderColor: stylesInfo.border }]}>
-                <Text style={[styles.markerBadgeText, { color: stylesInfo.color }]}>
-                  {station.price?.toFixed(3)}
-                </Text>
-                <View style={[styles.markerArrow, { borderTopColor: stylesInfo.color }]} />
-              </View>
-            </Marker>
-          );
-        })}
-      </MapView>
+      />
 
       {/* Floating Header UI */}
       <Header

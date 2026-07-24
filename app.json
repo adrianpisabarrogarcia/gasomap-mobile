@@ -28,14 +28,6 @@
     "web": {
       "favicon": "./assets/icon.png"
     },
-    "plugins": [
-      [
-        "react-native-maps",
-        {
-          "androidGoogleMapsApiKey": "CAMBIA_ESTO_POR_TU_API_KEY_DE_GOOGLE_MAPS"
-        }
-      ]
-    ],
     "extra": {
       "eas": {
         "projectId": "b6136618-0f73-4fa1-b1f2-810cf06ff017"
