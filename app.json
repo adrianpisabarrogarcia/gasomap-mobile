@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "GasoMap",
+    "slug": "gasomap-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "GasoMap necesita acceder a tu ubicación para mostrarte las gasolineras más cercanas y calcular las distancias en tiempo real."
+      }
+    },
+    "android": {
+      "package": "com.adrianpisabarro.gasomap",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#020617",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b6136618-0f73-4fa1-b1f2-810cf06ff017"
+      }
+    },
+    "owner": "adrian.pisabarro.garcia"
+  }
+}
