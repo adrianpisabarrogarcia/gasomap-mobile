@@ -53,6 +53,7 @@ function AppContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [showFuelModal, setShowFuelModal] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   
   const [selectedStationDetail, setSelectedStationDetail] = useState<GasStation | null>(null);
   const [selectedStationPreview, setSelectedStationPreview] = useState<GasStation | null>(null);
@@ -357,6 +358,7 @@ function AppContent() {
           triggerHaptic();
           setSelectedStationPreview(station);
         }}
+        isDarkMode={isDarkMode}
       />
 
       {/* Floating Header UI */}
@@ -373,6 +375,17 @@ function AppContent() {
         setShowFuelModal={setShowFuelModal}
         triggerHaptic={triggerHaptic}
       />
+
+      {/* Floating Theme Toggle Button */}
+      <TouchableOpacity
+        style={[styles.themeFloatingBtn, { bottom: (sheetPosition.current === 'collapsed' ? 175 : sheetPosition.current === 'middle' ? 435 : SHEET_MAX_HEIGHT + 75) }]}
+        onPress={() => {
+          triggerHaptic();
+          setIsDarkMode(!isDarkMode);
+        }}
+      >
+        <Text style={styles.themeFloatingText}>{isDarkMode ? '☀️' : '🌙'}</Text>
+      </TouchableOpacity>
 
       {/* Floating Geolocalize Button */}
       <TouchableOpacity
@@ -801,5 +814,26 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#020617',
     zIndex: 99,
+  },
+  themeFloatingBtn: {
+    position: 'absolute',
+    right: 15,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 8,
+  },
+  themeFloatingText: {
+    fontSize: 18,
   },
 });

@@ -6,6 +6,22 @@ El proyecto sigue el estándar de [SemVer](https://semver.org/spec/v2.0.0.html) 
 
 ---
 
+## [1.0.2] - 2026-07-25
+
+### Añadido
+- **Selector de modo de mapa (Oscuro/Claro):** Incorporado un botón flotante (`☀️` / `🌙`) que permite conmutar en caliente entre los estilos oscuros y claros del mapa de OpenStreetMap en tiempo real de forma suave.
+- **Motor de Mapas OpenStreetMap:** Reemplazado el motor nativo de Google Maps (`react-native-maps`) por un contenedor `WebView` impulsado por Leaflet.js para eliminar la dependencia de claves de API de Google Maps y evitar crasheos de arranque en la APK sin asociar tarjetas bancarias en Google Cloud.
+
+### Corregido
+- **Carga de recursos del WebView (Android):** Se inyectó una propiedad `baseUrl` para saltar las restricciones CORS de Android que bloqueaban la descarga de las librerías Leaflet externas, permitiendo que el mapa cargue correctamente en cualquier dispositivo.
+- **Doble escucha de eventos en el Bridge:** Se añadió compatibilidad para interceptar eventos de mensajería nativos en `document` y `window` simultáneamente, garantizando que el marcado de gasolineras en el mapa siempre se sincronice al refrescar.
+
+### Cambios de compilación
+- Incrementado el campo `version` a `1.0.2`.
+- Incrementado el entero `versionCode` a `3` en Android.
+
+---
+
 ## [1.0.1] - 2026-07-25
 
 ### Corregido

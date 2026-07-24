@@ -8,6 +8,7 @@ interface MapProps {
   filteredStations: GasStation[];
   onMarkerPress: (station: GasStation) => void;
   mapRef: React.RefObject<any>;
+  isDarkMode: boolean;
 }
 
 export default function Map({
@@ -15,6 +16,7 @@ export default function Map({
   filteredStations,
   onMarkerPress,
   mapRef,
+  isDarkMode,
 }: MapProps) {
   const webViewRef = useRef<WebView>(null);
 
@@ -34,7 +36,7 @@ export default function Map({
     }
   }, [mapRef]);
 
-  // Sync coords and station changes to Leaflet WebView
+  // Sync coords, theme, and station changes to Leaflet WebView
   useEffect(() => {
     const data = {
       type: 'SET_COORDS',
@@ -54,6 +56,14 @@ export default function Map({
     webViewRef.current?.postMessage(JSON.stringify(data));
   }, [filteredStations]);
 
+  useEffect(() => {
+    const data = {
+      type: 'SET_THEME',
+      isDarkMode,
+    };
+    webViewRef.current?.postMessage(JSON.stringify(data));
+  }, [isDarkMode]);
+
   const onMessage = (event: any) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
@@ -71,6 +81,10 @@ export default function Map({
         webViewRef.current?.postMessage(JSON.stringify({
           type: 'SET_STATIONS',
           stations: filteredStations,
+        }));
+        webViewRef.current?.postMessage(JSON.stringify({
+          type: 'SET_THEME',
+          isDarkMode,
         }));
       }
     } catch (e) {
@@ -99,10 +113,12 @@ export default function Map({
       <script>
         var map = L.map('map', { zoomControl: false }).setView([${currentCoords.latitude}, ${currentCoords.longitude}], 14);
         
-        // CartoDB Dark Matter tiles
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-          maxZoom: 20
-        }).addTo(map);
+        // CartoDB Tile Themes
+        var darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
+        var lightTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
+
+        var activeTiles = ${isDarkMode ? 'darkTiles' : 'lightTiles'};
+        activeTiles.addTo(map);
 
         var userMarker = null;
         var markersGroup = L.layerGroup().addTo(map);
@@ -160,6 +176,14 @@ export default function Map({
               });
             } else if (msg.type === 'CENTER_MAP') {
               map.setView([msg.latitude, msg.longitude], msg.zoom || 16);
+            } else if (msg.type === 'SET_THEME') {
+              map.removeLayer(darkTiles);
+              map.removeLayer(lightTiles);
+              if (msg.isDarkMode) {
+                darkTiles.addTo(map);
+              } else {
+                lightTiles.addTo(map);
+              }
             }
           } catch(e) {
             // Error parser fallback
