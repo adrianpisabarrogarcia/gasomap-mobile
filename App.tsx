@@ -3,7 +3,6 @@ import {
   StyleSheet,
   Text,
   View,
-  TextInput,
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
@@ -11,10 +10,7 @@ import {
   Dimensions,
   Animated,
   PanResponder,
-  Keyboard,
   Platform,
-  Modal,
-  ScrollView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -23,57 +19,24 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Type definitions
-interface GasStation {
-  id: string;
-  name: string;
-  address: string;
-  locality: string;
-  latitude: number;
-  longitude: number;
-  prices: { [key: string]: number | null };
-  distance?: number;
-  price?: number;
-  priceLevel?: 'cheapest' | 'economy' | 'moderate' | 'expensive' | 'most-expensive';
-}
-
-const API_URL = 'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/';
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=es&q=';
+// Refactored Imports
+import { GasStation, SortBy } from './src/types';
+import { 
+  API_URL, 
+  NOMINATIM_URL, 
+  MAP_DARK_STYLE, 
+  calculateDistance, 
+  getPriceLevelStyles,
+  FUEL_TYPES
+} from './src/utils/helpers';
+import Header from './src/components/Header';
+import PreviewCard from './src/components/PreviewCard';
+import StationModal from './src/components/StationModal';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
 const SHEET_MIN_HEIGHT = 100;
 const SHEET_MID_HEIGHT = 360;
-
-// Google Maps Dark Style
-const MAP_DARK_STYLE = [
-  { "elementType": "geometry", "stylers": [{ "color": "#0f172a" }] },
-  { "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
-  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#020617" }] },
-  { "featureType": "administrative", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e293b" }] },
-  { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
-  { "featureType": "landscape.natural", "elementType": "geometry", "stylers": [{ "color": "#090d16" }] },
-  { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#0b0f19" }] },
-  { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
-  { "featureType": "poi.park", "elementType": "geometry.fill", "stylers": [{ "color": "#052e16" }] },
-  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
-  { "featureType": "road.arterial", "elementType": "geometry", "stylers": [{ "color": "#334155" }] },
-  { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#0f172a" }, { "strokeColor": "#334155" }] },
-  { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e293b" }] },
-  { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
-  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#020617" }] },
-  { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#334155" }] }
-];
-
-const FUEL_TYPES = [
-  { label: 'Gasolina 95', value: 'Precio Gasolina 95 E5' },
-  { label: 'Gasolina 98', value: 'Precio Gasolina 98 E5' },
-  { label: 'Diésel A', value: 'Precio Gasoleo A' },
-  { label: 'Diésel Premium', value: 'Precio Gasoleo Premium' },
-  { label: 'Agrícola', value: 'Precio Gasoleo B' },
-  { label: 'Autogás GLP', value: 'Precio GPL' },
-  { label: 'Gas GNC', value: 'Precio GNC' },
-];
 
 function AppContent() {
   const insets = useSafeAreaInsets();
@@ -86,10 +49,11 @@ function AppContent() {
   const [filteredStations, setFilteredStations] = useState<GasStation[]>([]);
   const [selectedFuel, setSelectedFuel] = useState('Precio Gasolina 95 E5');
   const [searchRadius, setSearchRadius] = useState(5);
-  const [sortBy, setSortBy] = useState<'price' | 'distance'>('price');
+  const [sortBy, setSortBy] = useState<SortBy>('price');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [showFuelModal, setShowFuelModal] = useState(false);
+  
   const [selectedStationDetail, setSelectedStationDetail] = useState<GasStation | null>(null);
   const [selectedStationPreview, setSelectedStationPreview] = useState<GasStation | null>(null);
 
@@ -106,7 +70,6 @@ function AppContent() {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only trigger sheet drag if dragging vertically significantly
         return Math.abs(gestureState.dy) > 10;
       },
       onPanResponderMove: (_, gestureState) => {
@@ -119,16 +82,13 @@ function AppContent() {
           newHeight = SHEET_MAX_HEIGHT - gestureState.dy;
         }
         
-        // Boundaries check
         if (newHeight >= SHEET_MIN_HEIGHT && newHeight <= SHEET_MAX_HEIGHT) {
           animatedHeight.setValue(newHeight);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        // Determine snap target
         let targetHeight = SHEET_MID_HEIGHT;
         let finalPosition: 'collapsed' | 'middle' | 'expanded' = 'middle';
-
         const currentVal = (animatedHeight as any)._value;
 
         if (currentVal < (SHEET_MID_HEIGHT + SHEET_MIN_HEIGHT) / 2) {
@@ -167,7 +127,7 @@ function AppContent() {
     try {
       setLoading(true);
 
-      // Clean up legacy single-key cache if it exists to prevent SQLite CursorWindow crashes on Android
+      // Clean up legacy single-key cache
       try {
         await AsyncStorage.removeItem('gas_stations_db');
       } catch (e) {}
@@ -221,7 +181,7 @@ function AppContent() {
         }
       })).filter((s: any) => !isNaN(s.latitude) && !isNaN(s.longitude));
 
-      // Save chunked data (500 items max per row) to prevent SQLite CursorWindow limit (2MB) on Android
+      // Save chunked data (500 items max per row)
       const CHUNK_SIZE = 500;
       const numChunks = Math.ceil(parsed.length / CHUNK_SIZE);
       await AsyncStorage.setItem('gas_stations_db_chunks_count', String(numChunks));
@@ -251,7 +211,7 @@ function AppContent() {
         return;
       }
 
-      // 1. Get cached last known location first (Instant response, no satellite wait)
+      // 1. Get cached last known location first (Instant response)
       const lastKnown = await Location.getLastKnownPositionAsync({});
       if (lastKnown) {
         const cachedCoords = {
@@ -262,7 +222,7 @@ function AppContent() {
         centerMap(cachedCoords.latitude, cachedCoords.longitude);
       }
 
-      // 2. Query GPS in the background to get highly accurate current position
+      // 2. Query GPS in the background to get accurate current position
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
@@ -277,18 +237,6 @@ function AppContent() {
     } catch (error) {
       console.warn('Geolocation error:', error);
     }
-  };
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
   };
 
   const updateData = () => {
@@ -349,7 +297,6 @@ function AppContent() {
 
   const searchLocation = async () => {
     if (!searchQuery.trim()) return;
-    Keyboard.dismiss();
     setSearchingLocation(true);
     triggerHaptic();
 
@@ -388,47 +335,10 @@ function AppContent() {
     }
   };
 
-  const getPriceLevelStyles = (level?: string) => {
-    switch (level) {
-      case 'cheapest':
-        return { color: '#10b981', label: 'El más barato', badgeBg: 'rgba(16,185,129,0.15)', border: '#10b981' };
-      case 'economy':
-        return { color: '#14b8a6', label: 'Económico', badgeBg: 'rgba(20,184,166,0.15)', border: '#14b8a6' };
-      case 'moderate':
-        return { color: '#f59e0b', label: 'Precio Medio', badgeBg: 'rgba(245,158,11,0.15)', border: '#f59e0b' };
-      case 'expensive':
-        return { color: '#f97316', label: 'Precio Alto', badgeBg: 'rgba(249,115,22,0.15)', border: '#f97316' };
-      case 'most-expensive':
-        return { color: '#f43f5e', label: 'El más caro', badgeBg: 'rgba(244,63,94,0.15)', border: '#f43f5e' };
-      default:
-        return { color: '#94a3b8', label: 'Normal', badgeBg: 'rgba(148,163,184,0.15)', border: 'transparent' };
-    }
-  };
-
   const openNavigation = (station: GasStation) => {
     triggerHaptic();
     const url = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`;
     Linking.openURL(url);
-  };
-
-  // Fuel selector item renderer
-  const renderFuelOption = (fuel: typeof FUEL_TYPES[0]) => {
-    const isSelected = selectedFuel === fuel.value;
-    return (
-      <TouchableOpacity
-        key={fuel.value}
-        style={[styles.fuelOption, isSelected && styles.fuelOptionSelected]}
-        onPress={() => {
-          triggerHaptic();
-          setSelectedFuel(fuel.value);
-          setShowFuelModal(false);
-        }}
-      >
-        <Text style={[styles.fuelOptionText, isSelected && styles.fuelOptionTextSelected]}>
-          {fuel.label}
-        </Text>
-      </TouchableOpacity>
-    );
   };
 
   return (
@@ -481,71 +391,19 @@ function AppContent() {
       </MapView>
 
       {/* Floating Header UI */}
-      <View style={[styles.headerContainer, { top: insets.top + 10 }]}>
-        <View style={styles.searchRow}>
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Buscar ciudad o dirección..."
-            placeholderTextColor="#64748b"
-            style={styles.searchInput}
-            onSubmitEditing={searchLocation}
-          />
-          <TouchableOpacity 
-            style={styles.searchBtn} 
-            onPress={searchLocation}
-            disabled={searchingLocation}
-          >
-            {searchingLocation ? (
-              <ActivityIndicator size="small" color="#020617" />
-            ) : (
-              <Text style={styles.searchBtnText}>🔎</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Quick Radius Selection & Fuel selection button */}
-        <View style={styles.quickFilters}>
-          <TouchableOpacity 
-            style={styles.fuelBtn}
-            onPress={() => {
-              triggerHaptic();
-              setShowFuelModal(!showFuelModal);
-            }}
-          >
-            <Text style={styles.fuelBtnText}>
-              ⛽ {FUEL_TYPES.find(f => f.value === selectedFuel)?.label} ▾
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.radiusContainer}>
-            {[2, 5, 10, 20].map(r => (
-              <TouchableOpacity
-                key={r}
-                style={[styles.radiusBtn, searchRadius === r && styles.radiusBtnActive]}
-                onPress={() => {
-                  triggerHaptic();
-                  setSearchRadius(r);
-                }}
-              >
-                <Text style={[styles.radiusBtnText, searchRadius === r && styles.radiusBtnTextActive]}>
-                  {r}k
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
-
-      {/* Floating Fuel Select Modal Over Map */}
-      {showFuelModal && (
-        <View style={[styles.fuelModalContainer, { top: insets.top + 110 }]}>
-          <Text style={styles.fuelModalTitle}>Selecciona combustible</Text>
-          <View style={styles.fuelModalList}>
-            {FUEL_TYPES.map(renderFuelOption)}
-          </View>
-        </View>
-      )}
+      <Header
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchRadius={searchRadius}
+        setSearchRadius={setSearchRadius}
+        selectedFuel={selectedFuel}
+        setSelectedFuel={setSelectedFuel}
+        searchLocation={searchLocation}
+        searchingLocation={searchingLocation}
+        showFuelModal={showFuelModal}
+        setShowFuelModal={setShowFuelModal}
+        triggerHaptic={triggerHaptic}
+      />
 
       {/* Floating Geolocalize Button */}
       <TouchableOpacity
@@ -557,32 +415,13 @@ function AppContent() {
 
       {/* Floating Preview Card (Map Selection) */}
       {selectedStationPreview && (
-        <View style={[styles.previewCard, { bottom: (sheetPosition.current === 'collapsed' ? 120 : sheetPosition.current === 'middle' ? 380 : SHEET_MAX_HEIGHT + 20) }]}>
-          <View style={styles.previewHeader}>
-            <Text style={styles.previewName} numberOfLines={1}>{selectedStationPreview.name}</Text>
-            <TouchableOpacity 
-              onPress={() => setSelectedStationPreview(null)} 
-              style={styles.previewCloseBtn}
-            >
-              <Text style={styles.previewCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.previewAddress} numberOfLines={1}>{selectedStationPreview.address}</Text>
-          <View style={styles.previewFooter}>
-            <Text style={[styles.previewPrice, { color: getPriceLevelStyles(selectedStationPreview.priceLevel).color }]}>
-              {selectedStationPreview.price?.toFixed(3)} <Text style={styles.previewPriceUnit}>€/L</Text>
-            </Text>
-            <TouchableOpacity
-              style={styles.previewDetailBtn}
-              onPress={() => {
-                triggerHaptic();
-                setSelectedStationDetail(selectedStationPreview);
-              }}
-            >
-              <Text style={styles.previewDetailBtnText}>Ver detalles</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <PreviewCard
+          selectedStationPreview={selectedStationPreview}
+          setSelectedStationPreview={setSelectedStationPreview}
+          setSelectedStationDetail={setSelectedStationDetail}
+          triggerHaptic={triggerHaptic}
+          bottom={sheetPosition.current === 'collapsed' ? 120 : sheetPosition.current === 'middle' ? 380 : SHEET_MAX_HEIGHT + 20}
+        />
       )}
 
       {/* Sliding Bottom Sheet */}
@@ -655,7 +494,6 @@ function AppContent() {
                           triggerHaptic();
                           centerMap(item.latitude, item.longitude, 16);
                           setSelectedStationPreview(item);
-                          // Smooth collapse sheet to medium height
                           Animated.spring(animatedHeight, {
                             toValue: SHEET_MID_HEIGHT,
                             useNativeDriver: false,
@@ -695,73 +533,12 @@ function AppContent() {
       </Animated.View>
 
       {/* Fullscreen Details Modal */}
-      <Modal
-        visible={selectedStationDetail !== null}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setSelectedStationDetail(null)}
-      >
-        <View style={[styles.modalRoot, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10 }]}>
-          {/* Modal Header */}
-          <View style={styles.modalHeader}>
-            <TouchableOpacity 
-              style={styles.modalCloseBtn}
-              onPress={() => setSelectedStationDetail(null)}
-            >
-              <Text style={styles.modalCloseText}>✕ Cerrar</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalHeaderTitle} numberOfLines={1}>
-              {selectedStationDetail?.name}
-            </Text>
-          </View>
-
-          {/* Modal Content Scroll */}
-          <ScrollView contentContainerStyle={styles.modalScroll}>
-            <View style={styles.modalInfoCard}>
-              <Text style={styles.modalInfoName}>{selectedStationDetail?.name}</Text>
-              <Text style={styles.modalInfoAddress}>📍 {selectedStationDetail?.address}</Text>
-              <Text style={styles.modalInfoLocality}>🏙️ {selectedStationDetail?.locality}</Text>
-              <Text style={styles.modalInfoDistance}>🚗 A {selectedStationDetail?.distance?.toFixed(2)} km de tu ubicación</Text>
-            </View>
-
-            {/* Prices List */}
-            <Text style={styles.modalSectionTitle}>Precios disponibles</Text>
-            <View style={styles.priceListContainer}>
-              {selectedStationDetail && FUEL_TYPES.map(fuel => {
-                const price = selectedStationDetail.prices[fuel.value];
-                if (price === null) return null;
-                const isSelected = selectedFuel === fuel.value;
-                const priceStyles = getPriceLevelStyles(isSelected ? selectedStationDetail.priceLevel : 'normal');
-
-                return (
-                  <View 
-                    key={fuel.value} 
-                    style={[
-                      styles.priceRow, 
-                      isSelected && { borderLeftColor: getPriceLevelStyles(selectedStationDetail.priceLevel).color, borderLeftWidth: 4, backgroundColor: 'rgba(15, 23, 42, 0.4)' }
-                    ]}
-                  >
-                    <Text style={[styles.priceRowLabel, isSelected && { fontWeight: '800', color: '#f8fafc' }]}>
-                      {fuel.label} {isSelected && '•'}
-                    </Text>
-                    <Text style={[styles.priceRowValue, isSelected && { color: getPriceLevelStyles(selectedStationDetail.priceLevel).color, fontWeight: '900' }]}>
-                      {price.toFixed(3)} <Text style={styles.priceRowUnit}>€/L</Text>
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Google Maps directions */}
-            <TouchableOpacity
-              style={styles.modalRouteBtn}
-              onPress={() => selectedStationDetail && openNavigation(selectedStationDetail)}
-            >
-              <Text style={styles.modalRouteBtnText}>🗺️ Iniciar Ruta en Google Maps</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </Modal>
+      <StationModal
+        selectedStationDetail={selectedStationDetail}
+        setSelectedStationDetail={setSelectedStationDetail}
+        selectedFuel={selectedFuel}
+        openNavigation={openNavigation}
+      />
     </View>
   );
 }
@@ -829,83 +606,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 1,
   },
-  headerContainer: {
-    position: 'absolute',
-    left: 15,
-    right: 15,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    borderRadius: 18,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#020617',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-  },
-  searchInput: {
-    flex: 1,
-    color: '#f8fafc',
-    fontSize: 14,
-  },
-  searchBtn: {
-    paddingHorizontal: 8,
-  },
-  searchBtnText: {
-    fontSize: 16,
-  },
-  quickFilters: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'between',
-    marginTop: 10,
-    gap: 8,
-  },
-  fuelBtn: {
-    backgroundColor: '#020617',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 32,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#1e293b',
-  },
-  fuelBtnText: {
-    color: '#e2e8f0',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  radiusContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#020617',
-    borderRadius: 10,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    flex: 1,
-    justifyContent: 'space-around',
-  },
-  radiusBtn: {
-    paddingHorizontal: 8,
-    height: 28,
-    borderRadius: 8,
-    justifyContent: 'center',
-  },
-  radiusBtnActive: {
-    backgroundColor: '#1e293b',
-  },
-  radiusBtnText: {
-    color: '#64748b',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  radiusBtnTextActive: {
-    color: '#10b981',
-  },
   geolocateFloatingBtn: {
     position: 'absolute',
     right: 15,
@@ -922,6 +622,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3.84,
     elevation: 5,
+    zIndex: 8,
   },
   geolocateFloatingText: {
     fontSize: 20,
@@ -941,6 +642,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 24,
+    zIndex: 7,
   },
   dragHandleContainer: {
     alignItems: 'center',
@@ -1009,7 +711,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    justifyContent: 'between',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 14,
     borderBottomWidth: 1,
@@ -1050,11 +752,6 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
     marginBottom: 4,
-  },
-  cardDetails: {
-    color: '#64748b',
-    fontSize: 10,
-    fontWeight: '600',
   },
   cardRight: {
     alignItems: 'center',
@@ -1110,125 +807,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontWeight: '600',
   },
-  fuelOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-  },
-  fuelOptionSelected: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-  },
-  fuelOptionText: {
-    color: '#94a3b8',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  fuelOptionTextSelected: {
-    color: '#10b981',
-    fontWeight: '800',
-  },
-  fuelModalContainer: {
-    position: 'absolute',
-    left: 15,
-    right: 15,
-    backgroundColor: '#0f172a',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 10,
-  },
-  fuelModalTitle: {
-    color: '#64748b',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    paddingHorizontal: 16,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-  },
-  fuelModalList: {
-    maxHeight: 280,
-  },
-  previewCard: {
-    position: 'absolute',
-    left: 15,
-    right: 15,
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#334155',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  previewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  previewName: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#f8fafc',
-    textTransform: 'uppercase',
-    flex: 1,
-    marginRight: 10,
-  },
-  previewCloseBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#1e293b',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewCloseText: {
-    color: '#94a3b8',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  previewAddress: {
-    fontSize: 11,
-    color: '#94a3b8',
-    marginBottom: 8,
-  },
-  previewFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  previewPrice: {
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  previewPriceUnit: {
-    fontSize: 10,
-    color: '#64748b',
-    fontWeight: 'normal',
-  },
-  previewDetailBtn: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  previewDetailBtnText: {
-    color: '#020617',
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
   cardActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1246,131 +824,5 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     fontSize: 9,
     fontWeight: '700',
-  },
-  modalRoot: {
-    flex: 1,
-    backgroundColor: '#020617',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-    backgroundColor: '#0f172a',
-  },
-  modalCloseBtn: {
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  modalCloseText: {
-    color: '#f8fafc',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  modalHeaderTitle: {
-    color: '#f8fafc',
-    fontSize: 14,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    flex: 1,
-  },
-  modalScroll: {
-    padding: 16,
-    paddingBottom: 60,
-  },
-  modalInfoCard: {
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    marginBottom: 20,
-  },
-  modalInfoName: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#f8fafc',
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  modalInfoAddress: {
-    fontSize: 12,
-    color: '#e2e8f0',
-    marginBottom: 4,
-  },
-  modalInfoLocality: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginBottom: 4,
-  },
-  modalInfoDistance: {
-    fontSize: 12,
-    color: '#10b981',
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  modalSectionTitle: {
-    color: '#64748b',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    marginBottom: 10,
-    letterSpacing: 0.5,
-  },
-  priceListContainer: {
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    overflow: 'hidden',
-    marginBottom: 24,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-  },
-  priceRowLabel: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  priceRowValue: {
-    color: '#f8fafc',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  priceRowUnit: {
-    fontSize: 9,
-    color: '#64748b',
-    fontWeight: 'normal',
-  },
-  modalRouteBtn: {
-    backgroundColor: '#10b981',
-    borderRadius: 12,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  modalRouteBtnText: {
-    color: '#020617',
-    fontSize: 13,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
 });
