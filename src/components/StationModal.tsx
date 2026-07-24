@@ -31,6 +31,8 @@ export default function StationModal({
       visible={selectedStationDetail !== null}
       animationType="slide"
       transparent={false}
+      presentationStyle="fullScreen"
+      statusBarTranslucent={true}
       onRequestClose={() => setSelectedStationDetail(null)}
     >
       <View style={[styles.modalRoot, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10 }]}>

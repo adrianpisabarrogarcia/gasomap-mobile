@@ -343,7 +343,10 @@ function AppContent() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="light" backgroundColor="transparent" translucent />
+
+      {/* Top Status Bar Dark Cover Overlay */}
+      <View style={[styles.statusBarCover, { height: insets.top }]} />
 
       {/* Map View */}
       <MapView
@@ -824,5 +827,13 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     fontSize: 9,
     fontWeight: '700',
+  },
+  statusBarCover: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#020617',
+    zIndex: 99,
   },
 });
