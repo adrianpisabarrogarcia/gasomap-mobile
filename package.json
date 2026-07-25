@@ -1,6 +1,6 @@
 {
   "name": "gasomap-mobile",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "main": "index.ts",
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

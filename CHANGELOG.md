@@ -6,6 +6,18 @@ El proyecto sigue el estándar de [SemVer](https://semver.org/spec/v2.0.0.html) 
 
 ---
 
+## [1.0.3] - 2026-07-25
+
+### Añadido
+- **Botón flotante de actualización manual (🔄):** Incorporado un botón flotante con respuesta háptica en el mapa que permite forzar una petición HTTP limpia (omitiendo la caché de disco y red gracias a la cabecera `cache: 'no-store'` y parámetros dinámicos) y refrescar los precios en caliente.
+- **Geolocalización dinámica por provincia:** Implementada una consulta a la API de geocodificación inversa de Nominatim para identificar dinámicamente en qué provincia se encuentra el usuario (con normalización bilingüe como "Araba / Álava"). Esto reduce drásticamente el peso del JSON descargado de 12 MB (toda España) a unos pocos kilobytes (solo la provincia activa) en función de su geolocalización o búsquedas.
+
+### Cambios de compilación
+- Incrementado el campo `version` a `1.0.3` en `package.json` y `app.json`.
+- Incrementado el entero `versionCode` a `4` en Android (`app.json`).
+
+---
+
 ## [1.0.2] - 2026-07-25
 
 ### Añadido

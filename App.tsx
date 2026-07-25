@@ -38,6 +38,23 @@ const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
 const SHEET_MIN_HEIGHT = 100;
 const SHEET_MID_HEIGHT = 360;
 
+const PROVINCES_MAP: { [key: string]: string } = {
+  alava: '01', araba: '01', gipuzkoa: '20', guipuzcoa: '20', bizkaia: '48', vizcaya: '48',
+  albacete: '02', alicante: '03', alacant: '03', almeria: '04', avila: '05',
+  badajoz: '06', baleares: '07', balears: '07', mallorca: '07', menorca: '07', ibiza: '07',
+  barcelona: '08', burgos: '09', caceres: '10', cadiz: '11', castellon: '12', castelló: '12',
+  ciudadreal: '13', cordoba: '14', coruña: '15', lacoruña: '15', cuenca: '16',
+  girona: '17', gerona: '17', granada: '18', guadalajara: '19', huelva: '21',
+  huesca: '22', jaen: '23', leon: '24', lleida: '25', lerida: '25', larioja: '26', rioja: '26',
+  lugo: '27', madrid: '28', malaga: '29', murcia: '30', navarra: '31', nafarroa: '31',
+  ourense: '32', orense: '32', asturias: '33', oviedo: '33', palencia: '34',
+  laspalmas: '35', palmas: '35', pontevedra: '36', salamanca: '37',
+  tenerife: '38', santacruzdetenerife: '38', cantabria: '39', santander: '39',
+  segovia: '40', sevilla: '41', soria: '42', tarragona: '43', teruel: '44',
+  toledo: '45', valencia: '46', valència: '46', valladolid: '47',
+  zamora: '49', zaragoza: '50', ceuta: '51', melilla: '52'
+};
+
 function AppContent() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<any>(null);
@@ -62,6 +79,9 @@ function AppContent() {
     latitude: 40.416775,
     longitude: -3.703790,
   });
+
+  const [currentProvinceId, setCurrentProvinceId] = useState<string | null>(null);
+  const activeProvinceIdRef = useRef<string | null>(null);
 
   // Animated Bottom Sheet Setup
   const animatedHeight = useRef(new Animated.Value(SHEET_MID_HEIGHT)).current;
@@ -124,7 +144,33 @@ function AppContent() {
     updateData();
   }, [allStations, currentCoords, selectedFuel, searchRadius, sortBy]);
 
-  const loadGasStations = async () => {
+  const getProvinceIdFromCoords = async (lat: number, lon: number): Promise<string | null> => {
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, {
+        headers: {
+          'User-Agent': 'GasoMapMobile/1.0 (com.adrianpisabarro.gasomap)'
+        }
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const province = data.address?.province || data.address?.state || data.address?.region;
+      if (!province) return null;
+
+      const normalized = province.toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "");
+
+      // Búsqueda por subcadena para soportar nombres bilingües como "Araba / Álava"
+      const foundKey = Object.keys(PROVINCES_MAP).find(key => normalized.includes(key));
+      return foundKey ? PROVINCES_MAP[foundKey] : null;
+    } catch (e) {
+      console.error('Error reverse geocoding:', e);
+      return null;
+    }
+  };
+
+  const loadGasStations = async (forceRefresh = false, targetProvinceId: string | null = null) => {
     try {
       setLoading(true);
 
@@ -133,14 +179,27 @@ function AppContent() {
         await AsyncStorage.removeItem('gas_stations_db');
       } catch (e) {}
 
-      const cachedCount = await AsyncStorage.getItem('gas_stations_db_chunks_count');
-      if (cachedCount) {
+      let provinceId = targetProvinceId;
+      if (!provinceId) {
+        provinceId = activeProvinceIdRef.current;
+      }
+      if (!provinceId) {
+        const savedProvinceId = await AsyncStorage.getItem('last_province_id');
+        provinceId = savedProvinceId || '28'; // Madrid por defecto
+      }
+
+      activeProvinceIdRef.current = provinceId;
+      setCurrentProvinceId(provinceId);
+      await AsyncStorage.setItem('last_province_id', provinceId);
+
+      const cachedCount = await AsyncStorage.getItem(`gas_stations_db_chunks_count_${provinceId}`);
+      if (cachedCount && !forceRefresh) {
         const numChunks = parseInt(cachedCount, 10);
         let merged: GasStation[] = [];
         let success = true;
 
         for (let i = 0; i < numChunks; i++) {
-          const chunkStr = await AsyncStorage.getItem(`gas_stations_db_chunk_${i}`);
+          const chunkStr = await AsyncStorage.getItem(`gas_stations_db_chunk_${provinceId}_${i}`);
           if (chunkStr) {
             merged = merged.concat(JSON.parse(chunkStr));
           } else {
@@ -157,7 +216,9 @@ function AppContent() {
       }
 
       setLoadingStatus('Conectando con el Ministerio...');
-      const response = await fetch(API_URL);
+      const baseUrl = `https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/FiltroProvincia/${provinceId}`;
+      const fetchUrl = forceRefresh ? `${baseUrl}?t=${Date.now()}` : baseUrl;
+      const response = await fetch(fetchUrl, forceRefresh ? { cache: 'no-store' } : {});
       if (!response.ok) throw new Error('API server error');
       
       setLoadingStatus('Procesando datos...');
@@ -185,11 +246,11 @@ function AppContent() {
       // Save chunked data (500 items max per row)
       const CHUNK_SIZE = 500;
       const numChunks = Math.ceil(parsed.length / CHUNK_SIZE);
-      await AsyncStorage.setItem('gas_stations_db_chunks_count', String(numChunks));
+      await AsyncStorage.setItem(`gas_stations_db_chunks_count_${provinceId}`, String(numChunks));
 
       for (let i = 0; i < numChunks; i++) {
         const chunk = parsed.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-        await AsyncStorage.setItem(`gas_stations_db_chunk_${i}`, JSON.stringify(chunk));
+        await AsyncStorage.setItem(`gas_stations_db_chunk_${provinceId}_${i}`, JSON.stringify(chunk));
       }
 
       setAllStations(parsed);
@@ -197,7 +258,7 @@ function AppContent() {
     } catch (err) {
       console.error(err);
       setLoadingStatus('Error al conectar. Reintentando...');
-      setTimeout(loadGasStations, 5000);
+      setTimeout(() => loadGasStations(forceRefresh, targetProvinceId), 5000);
     }
   };
 
@@ -221,6 +282,13 @@ function AppContent() {
         };
         setCurrentCoords(cachedCoords);
         centerMap(cachedCoords.latitude, cachedCoords.longitude);
+        
+        // Reverse geocode in background
+        getProvinceIdFromCoords(cachedCoords.latitude, cachedCoords.longitude).then(provId => {
+          if (provId && provId !== activeProvinceIdRef.current) {
+            loadGasStations(false, provId);
+          }
+        });
       }
 
       // 2. Query GPS in the background to get accurate current position
@@ -235,6 +303,11 @@ function AppContent() {
 
       setCurrentCoords(newCoords);
       centerMap(newCoords.latitude, newCoords.longitude);
+
+      const provId = await getProvinceIdFromCoords(newCoords.latitude, newCoords.longitude);
+      if (provId && provId !== activeProvinceIdRef.current) {
+        await loadGasStations(false, provId);
+      }
     } catch (error) {
       console.warn('Geolocation error:', error);
     }
@@ -319,6 +392,11 @@ function AppContent() {
         };
         setCurrentCoords(newCoords);
         centerMap(newCoords.latitude, newCoords.longitude);
+
+        const provId = await getProvinceIdFromCoords(newCoords.latitude, newCoords.longitude);
+        if (provId && provId !== activeProvinceIdRef.current) {
+          await loadGasStations(false, provId);
+        }
       } else {
         alert('No se encontró la ubicación.');
       }
@@ -393,6 +471,17 @@ function AppContent() {
         onPress={() => geolocateUser(false)}
       >
         <Text style={styles.geolocateFloatingText}>🎯</Text>
+      </TouchableOpacity>
+
+      {/* Floating Refresh Button */}
+      <TouchableOpacity
+        style={[styles.refreshFloatingBtn, { bottom: (sheetPosition.current === 'collapsed' ? 230 : sheetPosition.current === 'middle' ? 490 : SHEET_MAX_HEIGHT + 130) }]}
+        onPress={() => {
+          triggerHaptic();
+          loadGasStations(true);
+        }}
+      >
+        <Text style={styles.refreshFloatingText}>🔄</Text>
       </TouchableOpacity>
 
       {/* Floating Preview Card (Map Selection) */}
@@ -834,6 +923,27 @@ const styles = StyleSheet.create({
     zIndex: 8,
   },
   themeFloatingText: {
+    fontSize: 18,
+  },
+  refreshFloatingBtn: {
+    position: 'absolute',
+    right: 15,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 8,
+  },
+  refreshFloatingText: {
     fontSize: 18,
   },
 });
