@@ -6,6 +6,23 @@ El proyecto sigue el estándar de [SemVer](https://semver.org/spec/v2.0.0.html) 
 
 ---
 
+## [1.1.0] - 2026-08-28
+
+### Añadido
+- **Persistencia de Preferencias de Usuario:** Creado el hook personalizado [`src/hooks/useAppSettings.ts`](file:///Users/apisabarro/dev/gasomap-mobile/src/hooks/useAppSettings.ts) para persistir las configuraciones del usuario en `AsyncStorage`. Se guardan y restauran de forma transparente entre sesiones: el combustible seleccionado, el radio de búsqueda (km), el criterio de ordenación (precio/distancia) y el modo claro/oscuro del mapa, previniendo parpadeos iniciales de carga.
+
+### Corregido
+- **API Key obligatoria en CARTO Basemaps:** Integrada la API key requerida por CARTO en el componente de mapa [`src/components/Map.tsx`](file:///Users/apisabarro/dev/gasomap-mobile/src/components/Map.tsx) mediante variables de entorno de Expo (`EXPO_PUBLIC_CARTO_API_KEY`) para eliminar el mensaje de "api key required" y restaurar la correcta visualización de las teselas (tiles) en modos claro y oscuro.
+
+### Cambiado
+- **Recarga desde la API al arrancar la app:** Modificada la inicialización en [`App.tsx`](file:///Users/apisabarro/dev/gasomap-mobile/App.tsx) para limpiar la caché persistida de gasolineras en `AsyncStorage` en cada inicio frío. Esto fuerza a la app a consultar y descargar siempre los precios frescos directamente de la API del Ministerio en cada sesión, a la vez que conserva la caché en memoria durante la navegación activa para no penalizar el rendimiento.
+
+### Cambios de compilación
+- Incrementado el campo `version` a `1.1.0` en `package.json` y `app.json`.
+- Incrementado el entero `versionCode` a `5` en Android (`app.json`).
+
+---
+
 ## [1.0.3] - 2026-07-25
 
 ### Añadido

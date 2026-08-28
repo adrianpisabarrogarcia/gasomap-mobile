@@ -7,13 +7,10 @@ import {
   FlatList,
   ActivityIndicator,
   Linking,
-  Dimensions,
   Animated,
-  PanResponder,
   Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,297 +18,111 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 // Refactored Imports
 import { GasStation, SortBy } from './src/types';
 import { 
-  API_URL, 
-  NOMINATIM_URL, 
-  MAP_DARK_STYLE, 
   calculateDistance, 
+  NOMINATIM_URL, 
   getPriceLevelStyles,
-  FUEL_TYPES
 } from './src/utils/helpers';
 import Header from './src/components/Header';
 import Map from './src/components/Map';
 import PreviewCard from './src/components/PreviewCard';
 import StationModal from './src/components/StationModal';
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
-const SHEET_MIN_HEIGHT = 100;
-const SHEET_MID_HEIGHT = 360;
-
-const PROVINCES_MAP: { [key: string]: string } = {
-  alava: '01', araba: '01', gipuzkoa: '20', guipuzcoa: '20', bizkaia: '48', vizcaya: '48',
-  albacete: '02', alicante: '03', alacant: '03', almeria: '04', avila: '05',
-  badajoz: '06', baleares: '07', balears: '07', mallorca: '07', menorca: '07', ibiza: '07',
-  barcelona: '08', burgos: '09', caceres: '10', cadiz: '11', castellon: '12', castelló: '12',
-  ciudadreal: '13', cordoba: '14', coruña: '15', lacoruña: '15', cuenca: '16',
-  girona: '17', gerona: '17', granada: '18', guadalajara: '19', huelva: '21',
-  huesca: '22', jaen: '23', leon: '24', lleida: '25', lerida: '25', larioja: '26', rioja: '26',
-  lugo: '27', madrid: '28', malaga: '29', murcia: '30', navarra: '31', nafarroa: '31',
-  ourense: '32', orense: '32', asturias: '33', oviedo: '33', palencia: '34',
-  laspalmas: '35', palmas: '35', pontevedra: '36', salamanca: '37',
-  tenerife: '38', santacruzdetenerife: '38', cantabria: '39', santander: '39',
-  segovia: '40', sevilla: '41', soria: '42', tarragona: '43', teruel: '44',
-  toledo: '45', valencia: '46', valència: '46', valladolid: '47',
-  zamora: '49', zaragoza: '50', ceuta: '51', melilla: '52'
-};
+// Hooks
+import { useGasStations } from './src/hooks/useGasStations';
+import { useUserLocation } from './src/hooks/useUserLocation';
+import { useBottomSheet } from './src/hooks/useBottomSheet';
+import { useAppSettings } from './src/hooks/useAppSettings';
 
 function AppContent() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<any>(null);
 
-  // States
-  const [loading, setLoading] = useState(true);
-  const [loadingStatus, setLoadingStatus] = useState('Descargando base de datos...');
-  const [allStations, setAllStations] = useState<GasStation[]>([]);
+  // Custom Hooks
+  const {
+    loading,
+    loadingStatus,
+    allStations,
+    activeProvinceIdRef,
+    loadGasStations,
+  } = useGasStations();
+
+  const centerMap = (lat: number, lng: number, zoom = 14) => {
+    mapRef.current?.animateToRegion({
+      latitude: lat,
+      longitude: lng,
+      latitudeDelta: 0.0922 / (zoom / 10),
+      longitudeDelta: 0.0421 / (zoom / 10),
+    }, 1000);
+  };
+
+  const triggerHaptic = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const {
+    currentCoords,
+    setCurrentCoords,
+    searchingLocation,
+    geolocateUser,
+    getProvinceIdFromCoords,
+  } = useUserLocation({
+    activeProvinceIdRef,
+    loadGasStations,
+    centerMap,
+    triggerHaptic,
+  });
+
+  const {
+    animatedHeight,
+    panResponder,
+    sheetPosition,
+    SHEET_MAX_HEIGHT,
+  } = useBottomSheet();
+
+  // App Settings Hook (Persistent)
+  const {
+    selectedFuel,
+    setSelectedFuel,
+    searchRadius,
+    setSearchRadius,
+    sortBy,
+    setSortBy,
+    isDarkMode,
+    setIsDarkMode,
+    loadingSettings
+  } = useAppSettings();
+
+  // Local UI States
   const [filteredStations, setFilteredStations] = useState<GasStation[]>([]);
-  const [selectedFuel, setSelectedFuel] = useState('Precio Gasolina 95 E5');
-  const [searchRadius, setSearchRadius] = useState(5);
-  const [sortBy, setSortBy] = useState<SortBy>('price');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchingLocation, setSearchingLocation] = useState(false);
+  const [searchingLocationLocal, setSearchingLocationLocal] = useState(false);
   const [showFuelModal, setShowFuelModal] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
   
   const [selectedStationDetail, setSelectedStationDetail] = useState<GasStation | null>(null);
   const [selectedStationPreview, setSelectedStationPreview] = useState<GasStation | null>(null);
 
-  const [currentCoords, setCurrentCoords] = useState({
-    latitude: 40.416775,
-    longitude: -3.703790,
-  });
-
-  const [currentProvinceId, setCurrentProvinceId] = useState<string | null>(null);
-  const activeProvinceIdRef = useRef<string | null>(null);
-
-  // Animated Bottom Sheet Setup
-  const animatedHeight = useRef(new Animated.Value(SHEET_MID_HEIGHT)).current;
-  const sheetPosition = useRef<'collapsed' | 'middle' | 'expanded'>('middle');
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dy) > 10;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        let newHeight = SHEET_MID_HEIGHT;
-        if (sheetPosition.current === 'middle') {
-          newHeight = SHEET_MID_HEIGHT - gestureState.dy;
-        } else if (sheetPosition.current === 'collapsed') {
-          newHeight = SHEET_MIN_HEIGHT - gestureState.dy;
-        } else if (sheetPosition.current === 'expanded') {
-          newHeight = SHEET_MAX_HEIGHT - gestureState.dy;
-        }
-        
-        if (newHeight >= SHEET_MIN_HEIGHT && newHeight <= SHEET_MAX_HEIGHT) {
-          animatedHeight.setValue(newHeight);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        let targetHeight = SHEET_MID_HEIGHT;
-        let finalPosition: 'collapsed' | 'middle' | 'expanded' = 'middle';
-        const currentVal = (animatedHeight as any)._value;
-
-        if (currentVal < (SHEET_MID_HEIGHT + SHEET_MIN_HEIGHT) / 2) {
-          targetHeight = SHEET_MIN_HEIGHT;
-          finalPosition = 'collapsed';
-        } else if (currentVal > (SHEET_MAX_HEIGHT + SHEET_MID_HEIGHT) / 2) {
-          targetHeight = SHEET_MAX_HEIGHT;
-          finalPosition = 'expanded';
-        } else {
-          targetHeight = SHEET_MID_HEIGHT;
-          finalPosition = 'middle';
-        }
-
-        sheetPosition.current = finalPosition;
-        Animated.spring(animatedHeight, {
-          toValue: targetHeight,
-          useNativeDriver: false,
-          damping: 20,
-        }).start();
-      }
-    })
-  ).current;
-
   // Initialize
   useEffect(() => {
-    loadGasStations();
-    geolocateUser(true);
+    const initApp = async () => {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        const cacheKeys = keys.filter(k => k.startsWith('gas_stations_db_'));
+        await AsyncStorage.multiRemove(cacheKeys);
+      } catch (e) {
+        console.error('Error clearing cache on startup:', e);
+      }
+      await loadGasStations();
+      geolocateUser(true);
+    };
+    initApp();
   }, []);
 
   // Recalculate on filter/coords change
   useEffect(() => {
     updateData();
   }, [allStations, currentCoords, selectedFuel, searchRadius, sortBy]);
-
-  const getProvinceIdFromCoords = async (lat: number, lon: number): Promise<string | null> => {
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, {
-        headers: {
-          'User-Agent': 'GasoMapMobile/1.0 (com.adrianpisabarro.gasomap)'
-        }
-      });
-      if (!response.ok) return null;
-      const data = await response.json();
-      const province = data.address?.province || data.address?.state || data.address?.region;
-      if (!province) return null;
-
-      const normalized = province.toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]/g, "");
-
-      // Búsqueda por subcadena para soportar nombres bilingües como "Araba / Álava"
-      const foundKey = Object.keys(PROVINCES_MAP).find(key => normalized.includes(key));
-      return foundKey ? PROVINCES_MAP[foundKey] : null;
-    } catch (e) {
-      console.error('Error reverse geocoding:', e);
-      return null;
-    }
-  };
-
-  const loadGasStations = async (forceRefresh = false, targetProvinceId: string | null = null) => {
-    try {
-      setLoading(true);
-
-      // Clean up legacy single-key cache
-      try {
-        await AsyncStorage.removeItem('gas_stations_db');
-      } catch (e) {}
-
-      let provinceId = targetProvinceId;
-      if (!provinceId) {
-        provinceId = activeProvinceIdRef.current;
-      }
-      if (!provinceId) {
-        const savedProvinceId = await AsyncStorage.getItem('last_province_id');
-        provinceId = savedProvinceId || '28'; // Madrid por defecto
-      }
-
-      activeProvinceIdRef.current = provinceId;
-      setCurrentProvinceId(provinceId);
-      await AsyncStorage.setItem('last_province_id', provinceId);
-
-      const cachedCount = await AsyncStorage.getItem(`gas_stations_db_chunks_count_${provinceId}`);
-      if (cachedCount && !forceRefresh) {
-        const numChunks = parseInt(cachedCount, 10);
-        let merged: GasStation[] = [];
-        let success = true;
-
-        for (let i = 0; i < numChunks; i++) {
-          const chunkStr = await AsyncStorage.getItem(`gas_stations_db_chunk_${provinceId}_${i}`);
-          if (chunkStr) {
-            merged = merged.concat(JSON.parse(chunkStr));
-          } else {
-            success = false;
-            break;
-          }
-        }
-
-        if (success && merged.length > 0) {
-          setAllStations(merged);
-          setLoading(false);
-          return;
-        }
-      }
-
-      setLoadingStatus('Conectando con el Ministerio...');
-      const baseUrl = `https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/FiltroProvincia/${provinceId}`;
-      const fetchUrl = forceRefresh ? `${baseUrl}?t=${Date.now()}` : baseUrl;
-      const response = await fetch(fetchUrl, forceRefresh ? { cache: 'no-store' } : {});
-      if (!response.ok) throw new Error('API server error');
-      
-      setLoadingStatus('Procesando datos...');
-      const data = await response.json();
-      const list = data.ListaEESSPrecio || [];
-
-      const parsed: GasStation[] = list.map((station: any) => ({
-        id: station['IDEESS'],
-        name: station['Rótulo'] || 'Sin nombre',
-        address: station['Dirección'] || '',
-        locality: station['Localidad'] || '',
-        latitude: parseFloat(station['Latitud'].replace(',', '.')),
-        longitude: parseFloat(station['Longitud (WGS84)'].replace(',', '.')),
-        prices: {
-          'Precio Gasolina 95 E5': parseFloat(station['Precio Gasolina 95 E5']?.replace(',', '.')) || null,
-          'Precio Gasolina 98 E5': parseFloat(station['Precio Gasolina 98 E5']?.replace(',', '.')) || null,
-          'Precio Gasoleo A': parseFloat(station['Precio Gasoleo A']?.replace(',', '.')) || null,
-          'Precio Gasoleo Premium': parseFloat(station['Precio Gasoleo Premium']?.replace(',', '.')) || null,
-          'Precio Gasoleo B': parseFloat(station['Precio Gasoleo B']?.replace(',', '.')) || null,
-          'Precio GPL': parseFloat(station['Precio Gases Licuados del Petróleo']?.replace(',', '.')) || null,
-          'Precio GNC': parseFloat(station['Precio Gas Natural Comprimido']?.replace(',', '.')) || null,
-        }
-      })).filter((s: any) => !isNaN(s.latitude) && !isNaN(s.longitude));
-
-      // Save chunked data (500 items max per row)
-      const CHUNK_SIZE = 500;
-      const numChunks = Math.ceil(parsed.length / CHUNK_SIZE);
-      await AsyncStorage.setItem(`gas_stations_db_chunks_count_${provinceId}`, String(numChunks));
-
-      for (let i = 0; i < numChunks; i++) {
-        const chunk = parsed.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-        await AsyncStorage.setItem(`gas_stations_db_chunk_${provinceId}_${i}`, JSON.stringify(chunk));
-      }
-
-      setAllStations(parsed);
-      setLoading(false);
-    } catch (err) {
-      console.error(err);
-      setLoadingStatus('Error al conectar. Reintentando...');
-      setTimeout(() => loadGasStations(forceRefresh, targetProvinceId), 5000);
-    }
-  };
-
-  const geolocateUser = async (isInitial = false) => {
-    try {
-      if (!isInitial) {
-        triggerHaptic();
-      }
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        if (!isInitial) alert('Permiso de GPS denegado.');
-        return;
-      }
-
-      // 1. Get cached last known location first (Instant response)
-      const lastKnown = await Location.getLastKnownPositionAsync({});
-      if (lastKnown) {
-        const cachedCoords = {
-          latitude: lastKnown.coords.latitude,
-          longitude: lastKnown.coords.longitude,
-        };
-        setCurrentCoords(cachedCoords);
-        centerMap(cachedCoords.latitude, cachedCoords.longitude);
-        
-        // Reverse geocode in background
-        getProvinceIdFromCoords(cachedCoords.latitude, cachedCoords.longitude).then(provId => {
-          if (provId && provId !== activeProvinceIdRef.current) {
-            loadGasStations(false, provId);
-          }
-        });
-      }
-
-      // 2. Query GPS in the background to get accurate current position
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      const newCoords = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-
-      setCurrentCoords(newCoords);
-      centerMap(newCoords.latitude, newCoords.longitude);
-
-      const provId = await getProvinceIdFromCoords(newCoords.latitude, newCoords.longitude);
-      if (provId && provId !== activeProvinceIdRef.current) {
-        await loadGasStations(false, provId);
-      }
-    } catch (error) {
-      console.warn('Geolocation error:', error);
-    }
-  };
 
   const updateData = () => {
     if (!allStations.length) return;
@@ -360,18 +171,9 @@ function AppContent() {
     setFilteredStations(computed);
   };
 
-  const centerMap = (lat: number, lng: number, zoom = 14) => {
-    mapRef.current?.animateToRegion({
-      latitude: lat,
-      longitude: lng,
-      latitudeDelta: 0.0922 / (zoom / 10),
-      longitudeDelta: 0.0421 / (zoom / 10),
-    }, 1000);
-  };
-
   const searchLocation = async () => {
     if (!searchQuery.trim()) return;
-    setSearchingLocation(true);
+    setSearchingLocationLocal(true);
     triggerHaptic();
 
     try {
@@ -404,13 +206,7 @@ function AppContent() {
       console.error(err);
       alert('Error al buscar la ubicación.');
     } finally {
-      setSearchingLocation(false);
-    }
-  };
-
-  const triggerHaptic = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setSearchingLocationLocal(false);
     }
   };
 
@@ -419,6 +215,14 @@ function AppContent() {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`;
     Linking.openURL(url);
   };
+
+  if (loadingSettings) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -448,7 +252,7 @@ function AppContent() {
         selectedFuel={selectedFuel}
         setSelectedFuel={setSelectedFuel}
         searchLocation={searchLocation}
-        searchingLocation={searchingLocation}
+        searchingLocation={searchingLocation || searchingLocationLocal}
         showFuelModal={showFuelModal}
         setShowFuelModal={setShowFuelModal}
         triggerHaptic={triggerHaptic}

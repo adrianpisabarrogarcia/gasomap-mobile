@@ -19,6 +19,7 @@ export default function Map({
   isDarkMode,
 }: MapProps) {
   const webViewRef = useRef<WebView>(null);
+  const apiKey = process.env.EXPO_PUBLIC_CARTO_API_KEY || '';
 
   // Expose centerMap control via ref redirection
   useEffect(() => {
@@ -114,8 +115,8 @@ export default function Map({
         var map = L.map('map', { zoomControl: false }).setView([${currentCoords.latitude}, ${currentCoords.longitude}], 14);
         
         // CartoDB Tile Themes
-        var darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
-        var lightTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
+        var darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${apiKey}', { maxZoom: 20 });
+        var lightTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${apiKey}', { maxZoom: 20 });
 
         var activeTiles = ${isDarkMode ? 'darkTiles' : 'lightTiles'};
         activeTiles.addTo(map);
