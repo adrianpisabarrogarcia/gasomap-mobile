@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { Animated, PanResponder, Dimensions } from 'react-native';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SHEET_MAX_HEIGHT = SCREEN_HEIGHT - 280;
+const SHEET_MAX_HEIGHT = SCREEN_HEIGHT - 340;
 const SHEET_MIN_HEIGHT = 100;
 const SHEET_MID_HEIGHT = 360;
 

@@ -196,6 +196,11 @@ function AppContent() {
         onMarkerPress={(station) => {
           triggerHaptic();
           setSelectedStationPreview(station);
+          Animated.spring(animatedHeight, {
+            toValue: SHEET_MID_HEIGHT,
+            useNativeDriver: false,
+          }).start();
+          sheetPosition.current = 'middle';
         }}
         isDarkMode={isDarkMode}
         onMapMove={(lat, lon, zoom) => {
