@@ -70,23 +70,24 @@ export function useGasStations() {
       setCurrentProvinceId(activeProvId);
       await AsyncStorage.setItem('last_province_id', activeProvId);
 
-      const mergedStationsMap = new Map<string, GasStation>();
+      // Optimization: if we need to load a massive area (radius > 80 km or > 5 provinces),
+      // download all of Spain in a single API call instead of making multiple province queries!
+      const loadAllOfSpain = (radius && radius > 80) || provincesToLoad.length > 5;
 
-      // Load data for all resolved provinces
-      for (const provId of provincesToLoad) {
-        setLoadingStatus(`Cargando provincia ${provId}...`);
-        let provStations: GasStation[] = [];
+      if (loadAllOfSpain) {
+        setLoadingStatus('Cargando base de datos nacional (España)...');
         let loadedFromCache = false;
+        let spainStations: GasStation[] = [];
 
         if (!forceRefresh) {
-          const cachedCount = await AsyncStorage.getItem(`gas_stations_db_chunks_count_${provId}`);
+          const cachedCount = await AsyncStorage.getItem('gas_stations_db_chunks_count_all');
           if (cachedCount) {
             const numChunks = parseInt(cachedCount, 10);
             let mergedChunks: GasStation[] = [];
             let success = true;
 
             for (let i = 0; i < numChunks; i++) {
-              const chunkStr = await AsyncStorage.getItem(`gas_stations_db_chunk_${provId}_${i}`);
+              const chunkStr = await AsyncStorage.getItem(`gas_stations_db_chunk_all_${i}`);
               if (chunkStr) {
                 mergedChunks = mergedChunks.concat(JSON.parse(chunkStr));
               } else {
@@ -96,60 +97,137 @@ export function useGasStations() {
             }
 
             if (success && mergedChunks.length > 0) {
-              provStations = mergedChunks;
+              spainStations = mergedChunks;
               loadedFromCache = true;
             }
           }
         }
 
         if (!loadedFromCache) {
-          setLoadingStatus(`Descargando provincia ${provId}...`);
-          const baseUrl = `https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/FiltroProvincia/${provId}`;
+          setLoadingStatus('Descargando gasolineras de España (esto puede tardar unos segundos)...');
+          const baseUrl = 'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/';
           const fetchUrl = forceRefresh ? `${baseUrl}?t=${Date.now()}` : baseUrl;
           const response = await fetch(fetchUrl, forceRefresh ? { cache: 'no-store' } : {});
-          if (response.ok) {
-            const data = await response.json();
-            const list = data.ListaEESSPrecio || [];
+          if (!response.ok) throw new Error('API Spain-wide server error');
+          
+          const data = await response.json();
+          const list = data.ListaEESSPrecio || [];
 
-            const parsed: GasStation[] = list.map((station: any) => ({
-              id: station['IDEESS'],
-              name: station['Rótulo'] || 'Sin nombre',
-              address: station['Dirección'] || '',
-              locality: station['Localidad'] || '',
-              latitude: parseFloat(station['Latitud'].replace(',', '.')),
-              longitude: parseFloat(station['Longitud (WGS84)'].replace(',', '.')),
-              prices: {
-                'Precio Gasolina 95 E5': parseFloat(station['Precio Gasolina 95 E5']?.replace(',', '.')) || null,
-                'Precio Gasolina 98 E5': parseFloat(station['Precio Gasolina 98 E5']?.replace(',', '.')) || null,
-                'Precio Gasoleo A': parseFloat(station['Precio Gasoleo A']?.replace(',', '.')) || null,
-                'Precio Gasoleo Premium': parseFloat(station['Precio Gasoleo Premium']?.replace(',', '.')) || null,
-                'Precio Gasoleo B': parseFloat(station['Precio Gasoleo B']?.replace(',', '.')) || null,
-                'Precio GPL': parseFloat(station['Precio Gases Licuados del Petróleo']?.replace(',', '.')) || null,
-                'Precio GNC': parseFloat(station['Precio Gas Natural Comprimido']?.replace(',', '.')) || null,
-              }
-            })).filter((s: any) => !isNaN(s.latitude) && !isNaN(s.longitude));
-
-            // Cache chunked data
-            const CHUNK_SIZE = 500;
-            const numChunks = Math.ceil(parsed.length / CHUNK_SIZE);
-            await AsyncStorage.setItem(`gas_stations_db_chunks_count_${provId}`, String(numChunks));
-
-            for (let i = 0; i < numChunks; i++) {
-              const chunk = parsed.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-              await AsyncStorage.setItem(`gas_stations_db_chunk_${provId}_${i}`, JSON.stringify(chunk));
+          const parsed: GasStation[] = list.map((station: any) => ({
+            id: station['IDEESS'],
+            name: station['Rótulo'] || 'Sin nombre',
+            address: station['Dirección'] || '',
+            locality: station['Localidad'] || '',
+            latitude: parseFloat(station['Latitud'].replace(',', '.')),
+            longitude: parseFloat(station['Longitud (WGS84)'].replace(',', '.')),
+            prices: {
+              'Precio Gasolina 95 E5': parseFloat(station['Precio Gasolina 95 E5']?.replace(',', '.')) || null,
+              'Precio Gasolina 98 E5': parseFloat(station['Precio Gasolina 98 E5']?.replace(',', '.')) || null,
+              'Precio Gasoleo A': parseFloat(station['Precio Gasoleo A']?.replace(',', '.')) || null,
+              'Precio Gasoleo Premium': parseFloat(station['Precio Gasoleo Premium']?.replace(',', '.')) || null,
+              'Precio Gasoleo B': parseFloat(station['Precio Gasoleo B']?.replace(',', '.')) || null,
+              'Precio GPL': parseFloat(station['Precio Gases Licuados del Petróleo']?.replace(',', '.')) || null,
+              'Precio GNC': parseFloat(station['Precio Gas Natural Comprimido']?.replace(',', '.')) || null,
             }
+          })).filter((s: any) => !isNaN(s.latitude) && !isNaN(s.longitude));
 
-            provStations = parsed;
+          // Cache chunked data (1000 items max per chunk for Spain)
+          const CHUNK_SIZE = 1000;
+          const numChunks = Math.ceil(parsed.length / CHUNK_SIZE);
+          await AsyncStorage.setItem('gas_stations_db_chunks_count_all', String(numChunks));
+
+          for (let i = 0; i < numChunks; i++) {
+            const chunk = parsed.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+            await AsyncStorage.setItem(`gas_stations_db_chunk_all_${i}`, JSON.stringify(chunk));
           }
+
+          spainStations = parsed;
         }
 
-        // Add to map to deduplicate by ID
-        provStations.forEach(s => {
-          mergedStationsMap.set(s.id, s);
-        });
-      }
+        setAllStations(spainStations);
+      } else {
+        const mergedStationsMap = new Map<string, GasStation>();
 
-      setAllStations(Array.from(mergedStationsMap.values()));
+        // Load data for all resolved provinces
+        for (const provId of provincesToLoad) {
+          setLoadingStatus(`Cargando provincia ${provId}...`);
+          let provStations: GasStation[] = [];
+          let loadedFromCache = false;
+
+          if (!forceRefresh) {
+            const cachedCount = await AsyncStorage.getItem(`gas_stations_db_chunks_count_${provId}`);
+            if (cachedCount) {
+              const numChunks = parseInt(cachedCount, 10);
+              let mergedChunks: GasStation[] = [];
+              let success = true;
+
+              for (let i = 0; i < numChunks; i++) {
+                const chunkStr = await AsyncStorage.getItem(`gas_stations_db_chunk_${provId}_${i}`);
+                if (chunkStr) {
+                  mergedChunks = mergedChunks.concat(JSON.parse(chunkStr));
+                } else {
+                  success = false;
+                  break;
+                }
+              }
+
+              if (success && mergedChunks.length > 0) {
+                provStations = mergedChunks;
+                loadedFromCache = true;
+              }
+            }
+          }
+
+          if (!loadedFromCache) {
+            setLoadingStatus(`Descargando provincia ${provId}...`);
+            const baseUrl = `https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/FiltroProvincia/${provId}`;
+            const fetchUrl = forceRefresh ? `${baseUrl}?t=${Date.now()}` : baseUrl;
+            const response = await fetch(fetchUrl, forceRefresh ? { cache: 'no-store' } : {});
+            if (response.ok) {
+              const data = await response.json();
+              const list = data.ListaEESSPrecio || [];
+
+              const parsed: GasStation[] = list.map((station: any) => ({
+                id: station['IDEESS'],
+                name: station['Rótulo'] || 'Sin nombre',
+                address: station['Dirección'] || '',
+                locality: station['Localidad'] || '',
+                latitude: parseFloat(station['Latitud'].replace(',', '.')),
+                longitude: parseFloat(station['Longitud (WGS84)'].replace(',', '.')),
+                prices: {
+                  'Precio Gasolina 95 E5': parseFloat(station['Precio Gasolina 95 E5']?.replace(',', '.')) || null,
+                  'Precio Gasolina 98 E5': parseFloat(station['Precio Gasolina 98 E5']?.replace(',', '.')) || null,
+                  'Precio Gasoleo A': parseFloat(station['Precio Gasoleo A']?.replace(',', '.')) || null,
+                  'Precio Gasoleo Premium': parseFloat(station['Precio Gasoleo Premium']?.replace(',', '.')) || null,
+                  'Precio Gasoleo B': parseFloat(station['Precio Gasoleo B']?.replace(',', '.')) || null,
+                  'Precio GPL': parseFloat(station['Precio Gases Licuados del Petróleo']?.replace(',', '.')) || null,
+                  'Precio GNC': parseFloat(station['Precio Gas Natural Comprimido']?.replace(',', '.')) || null,
+                }
+              })).filter((s: any) => !isNaN(s.latitude) && !isNaN(s.longitude));
+
+              // Cache chunked data
+              const CHUNK_SIZE = 500;
+              const numChunks = Math.ceil(parsed.length / CHUNK_SIZE);
+              await AsyncStorage.setItem(`gas_stations_db_chunks_count_${provId}`, String(numChunks));
+
+              for (let i = 0; i < numChunks; i++) {
+                const chunk = parsed.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+                await AsyncStorage.setItem(`gas_stations_db_chunk_${provId}_${i}`, JSON.stringify(chunk));
+              }
+
+              provStations = parsed;
+            }
+          }
+
+          // Add to map to deduplicate by ID
+          provStations.forEach(s => {
+            mergedStationsMap.set(s.id, s);
+          });
+        }
+
+        setAllStations(Array.from(mergedStationsMap.values()));
+      }
+      
       setLoading(false);
     } catch (err) {
       console.error(err);

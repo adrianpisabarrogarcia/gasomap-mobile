@@ -10,6 +10,7 @@ interface MapProps {
   mapRef: React.RefObject<any>;
   isDarkMode: boolean;
   onZoomChange?: (zoom: number) => void;
+  onMapMove?: (latitude: number, longitude: number, zoom: number) => void;
 }
 
 export default function Map({
@@ -19,6 +20,7 @@ export default function Map({
   mapRef,
   isDarkMode,
   onZoomChange,
+  onMapMove,
 }: MapProps) {
   const webViewRef = useRef<WebView>(null);
   const apiKey = process.env.EXPO_PUBLIC_CARTO_API_KEY || '';
@@ -74,6 +76,8 @@ export default function Map({
         onMarkerPress(msg.station);
       } else if (msg.type === 'ZOOM_CHANGED') {
         onZoomChange?.(msg.zoom);
+      } else if (msg.type === 'MAP_MOVE') {
+        onMapMove?.(msg.latitude, msg.longitude, msg.zoom);
       } else if (msg.type === 'MAP_READY') {
         // Init sync
         webViewRef.current?.postMessage(JSON.stringify({
@@ -198,8 +202,14 @@ export default function Map({
         window.addEventListener('message', handleMessage);
         document.addEventListener('message', handleMessage);
 
-        map.on('zoomend', function() {
-          sendToRN({ type: 'ZOOM_CHANGED', zoom: map.getZoom() });
+        map.on('moveend', function() {
+          var center = map.getCenter();
+          sendToRN({
+            type: 'MAP_MOVE',
+            latitude: center.lat,
+            longitude: center.lng,
+            zoom: map.getZoom()
+          });
         });
 
         // Notify ready

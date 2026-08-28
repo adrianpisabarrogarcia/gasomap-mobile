@@ -135,7 +135,7 @@ export default function Header({
               }
             ]}
           >
-            {[2, 5, 10, 20].map(r => (
+            {[2, 5, 10, 20, 50, 100, 500].map(r => (
               <TouchableOpacity
                 key={r}
                 style={[
@@ -148,7 +148,7 @@ export default function Header({
                 }}
               >
                 <Text style={[styles.radiusBtnText, searchRadius === r && styles.radiusBtnTextActive]}>
-                  {r}k
+                  {r === 500 ? 'ES' : `${r}k`}
                 </Text>
               </TouchableOpacity>
             ))}

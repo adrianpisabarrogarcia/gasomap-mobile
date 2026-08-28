@@ -97,7 +97,8 @@ function AppContent() {
   } = useAppSettings();
 
   // Local UI States
-  const filteredStations = useFilteredStations(allStations, currentCoords, selectedFuel, searchRadius, sortBy);
+  const [searchCenter, setSearchCenter] = useState({ latitude: 40.416775, longitude: -3.703790 });
+  const filteredStations = useFilteredStations(allStations, searchCenter, selectedFuel, searchRadius, sortBy);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchingLocationLocal, setSearchingLocationLocal] = useState(false);
   const [showFuelModal, setShowFuelModal] = useState(false);
@@ -121,10 +122,15 @@ function AppContent() {
     initApp();
   }, []);
 
-  // Load gas stations reactively when user position or search radius changes
+  // Load gas stations reactively when search center or search radius changes
   useEffect(() => {
-    loadGasStations(false, currentCoords, searchRadius);
-  }, [currentCoords.latitude, currentCoords.longitude, searchRadius]);
+    loadGasStations(false, searchCenter, searchRadius);
+  }, [searchCenter.latitude, searchCenter.longitude, searchRadius]);
+
+  // Keep search center in sync with GPS location on initial load or manual geolocation
+  useEffect(() => {
+    setSearchCenter(currentCoords);
+  }, [currentCoords.latitude, currentCoords.longitude]);
 
   const searchLocation = async () => {
     if (!searchQuery.trim()) return;
@@ -148,12 +154,8 @@ function AppContent() {
           longitude: parseFloat(results[0].lon),
         };
         setCurrentCoords(newCoords);
+        setSearchCenter(newCoords);
         centerMap(newCoords.latitude, newCoords.longitude);
-
-        const provId = await getProvinceIdFromCoords(newCoords.latitude, newCoords.longitude);
-        if (provId && provId !== activeProvinceIdRef.current) {
-          await loadGasStations(false, provId);
-        }
       } else {
         alert('No se encontró la ubicación.');
       }
@@ -196,12 +198,20 @@ function AppContent() {
           setSelectedStationPreview(station);
         }}
         isDarkMode={isDarkMode}
-        onZoomChange={(zoom) => {
+        onMapMove={(lat, lon, zoom) => {
+          // 1. Update search center
+          setSearchCenter({ latitude: lat, longitude: lon });
+
+          // 2. Map zoom level to search radius in km
           let newRadius = 5;
           if (zoom >= 16) newRadius = 2;
-          else if (zoom === 15 || zoom === 14) newRadius = 5;
+          else if (zoom === 15) newRadius = 3;
+          else if (zoom === 14) newRadius = 5;
           else if (zoom === 13) newRadius = 10;
-          else if (zoom <= 12) newRadius = 20;
+          else if (zoom === 12) newRadius = 20;
+          else if (zoom === 11) newRadius = 50;
+          else if (zoom === 10) newRadius = 100;
+          else if (zoom <= 9) newRadius = 500; // All Spain!
 
           if (newRadius !== searchRadius) {
             setSearchRadius(newRadius);
