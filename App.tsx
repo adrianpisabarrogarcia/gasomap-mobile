@@ -191,6 +191,17 @@ function AppContent() {
           setSelectedStationPreview(station);
         }}
         isDarkMode={isDarkMode}
+        onZoomChange={(zoom) => {
+          let newRadius = 5;
+          if (zoom >= 16) newRadius = 2;
+          else if (zoom === 15 || zoom === 14) newRadius = 5;
+          else if (zoom === 13) newRadius = 10;
+          else if (zoom <= 12) newRadius = 20;
+
+          if (newRadius !== searchRadius) {
+            setSearchRadius(newRadius);
+          }
+        }}
       />
 
       {/* Floating Header UI */}

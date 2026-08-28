@@ -9,6 +9,7 @@ interface MapProps {
   onMarkerPress: (station: GasStation) => void;
   mapRef: React.RefObject<any>;
   isDarkMode: boolean;
+  onZoomChange?: (zoom: number) => void;
 }
 
 export default function Map({
@@ -17,6 +18,7 @@ export default function Map({
   onMarkerPress,
   mapRef,
   isDarkMode,
+  onZoomChange,
 }: MapProps) {
   const webViewRef = useRef<WebView>(null);
   const apiKey = process.env.EXPO_PUBLIC_CARTO_API_KEY || '';
@@ -70,6 +72,8 @@ export default function Map({
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === 'MARKER_PRESS') {
         onMarkerPress(msg.station);
+      } else if (msg.type === 'ZOOM_CHANGED') {
+        onZoomChange?.(msg.zoom);
       } else if (msg.type === 'MAP_READY') {
         // Init sync
         webViewRef.current?.postMessage(JSON.stringify({
@@ -193,6 +197,10 @@ export default function Map({
 
         window.addEventListener('message', handleMessage);
         document.addEventListener('message', handleMessage);
+
+        map.on('zoomend', function() {
+          sendToRN({ type: 'ZOOM_CHANGED', zoom: map.getZoom() });
+        });
 
         // Notify ready
         setTimeout(function() {
