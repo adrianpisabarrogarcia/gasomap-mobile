@@ -58,6 +58,11 @@ export function useFilteredStations(
       computed.sort((a, b) => a.distance! - b.distance!);
     }
 
+    // Limit elements to prevent WebView rendering crash when zoomed out (max 250 markers)
+    if (computed.length > 250) {
+      computed = computed.slice(0, 250);
+    }
+
     return computed;
   }, [allStations, currentCoords, selectedFuel, searchRadius, sortBy]);
 
