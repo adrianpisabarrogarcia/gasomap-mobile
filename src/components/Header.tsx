@@ -24,6 +24,7 @@ interface HeaderProps {
   showFuelModal: boolean;
   setShowFuelModal: (show: boolean) => void;
   triggerHaptic: () => void;
+  isDark: boolean;
 }
 
 export default function Header({
@@ -38,6 +39,7 @@ export default function Header({
   showFuelModal,
   setShowFuelModal,
   triggerHaptic,
+  isDark,
 }: HeaderProps) {
   const insets = useSafeAreaInsets();
 
@@ -46,14 +48,24 @@ export default function Header({
     return (
       <TouchableOpacity
         key={fuel.value}
-        style={[styles.fuelOption, isSelected && styles.fuelOptionSelected]}
+        style={[
+          styles.fuelOption,
+          { borderBottomColor: isDark ? '#1e293b' : '#e2e8f0' },
+          isSelected && (isDark ? styles.fuelOptionSelected : { backgroundColor: 'rgba(16, 185, 129, 0.08)' })
+        ]}
         onPress={() => {
           triggerHaptic();
           setSelectedFuel(fuel.value);
           setShowFuelModal(false);
         }}
       >
-        <Text style={[styles.fuelOptionText, isSelected && styles.fuelOptionTextSelected]}>
+        <Text
+          style={[
+            styles.fuelOptionText,
+            { color: isDark ? '#94a3b8' : '#475569' },
+            isSelected && styles.fuelOptionTextSelected
+          ]}
+        >
           {fuel.label}
         </Text>
       </TouchableOpacity>
@@ -62,14 +74,23 @@ export default function Header({
 
   return (
     <>
-      <View style={[styles.headerContainer, { top: insets.top + 10 }]}>
-        <View style={styles.searchRow}>
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            top: insets.top + 10,
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.92)',
+            borderColor: isDark ? '#1e293b' : '#e2e8f0',
+          }
+        ]}
+      >
+        <View style={[styles.searchRow, { backgroundColor: isDark ? '#020617' : '#f1f5f9' }]}>
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Buscar ciudad o dirección..."
             placeholderTextColor="#64748b"
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: isDark ? '#f8fafc' : '#0f172a' }]}
             onSubmitEditing={searchLocation}
           />
           <TouchableOpacity 
@@ -78,7 +99,7 @@ export default function Header({
             disabled={searchingLocation}
           >
             {searchingLocation ? (
-              <ActivityIndicator size="small" color="#020617" />
+              <ActivityIndicator size="small" color={isDark ? '#f8fafc' : '#0f172a'} />
             ) : (
               <Text style={styles.searchBtnText}>🔎</Text>
             )}
@@ -88,22 +109,39 @@ export default function Header({
         {/* Quick Radius & Fuel selectors */}
         <View style={styles.quickFilters}>
           <TouchableOpacity 
-            style={styles.fuelBtn}
+            style={[
+              styles.fuelBtn,
+              {
+                backgroundColor: isDark ? '#020617' : '#f1f5f9',
+                borderColor: isDark ? '#1e293b' : '#e2e8f0',
+              }
+            ]}
             onPress={() => {
               triggerHaptic();
               setShowFuelModal(!showFuelModal);
             }}
           >
-            <Text style={styles.fuelBtnText}>
+            <Text style={[styles.fuelBtnText, { color: isDark ? '#e2e8f0' : '#334155' }]}>
               ⛽ {FUEL_TYPES.find(f => f.value === selectedFuel)?.label} ▾
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.radiusContainer}>
+          <View
+            style={[
+              styles.radiusContainer,
+              {
+                backgroundColor: isDark ? '#020617' : '#f1f5f9',
+                borderColor: isDark ? '#1e293b' : '#e2e8f0',
+              }
+            ]}
+          >
             {[2, 5, 10, 20].map(r => (
               <TouchableOpacity
                 key={r}
-                style={[styles.radiusBtn, searchRadius === r && styles.radiusBtnActive]}
+                style={[
+                  styles.radiusBtn,
+                  searchRadius === r && (isDark ? styles.radiusBtnActive : { backgroundColor: '#e2e8f0' })
+                ]}
                 onPress={() => {
                   triggerHaptic();
                   setSearchRadius(r);
@@ -120,8 +158,19 @@ export default function Header({
 
       {/* Floating Fuel Select Modal */}
       {showFuelModal && (
-        <View style={[styles.fuelModalContainer, { top: insets.top + 110 }]}>
-          <Text style={styles.fuelModalTitle}>Selecciona combustible</Text>
+        <View
+          style={[
+            styles.fuelModalContainer,
+            {
+              top: insets.top + 110,
+              backgroundColor: isDark ? '#0f172a' : '#ffffff',
+              borderColor: isDark ? '#1e293b' : '#e2e8f0',
+            }
+          ]}
+        >
+          <Text style={[styles.fuelModalTitle, { borderBottomColor: isDark ? '#1e293b' : '#e2e8f0' }]}>
+            Selecciona combustible
+          </Text>
           <View style={styles.fuelModalList}>
             {FUEL_TYPES.map(renderFuelOption)}
           </View>

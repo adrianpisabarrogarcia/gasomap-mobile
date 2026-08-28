@@ -16,6 +16,7 @@ interface StationModalProps {
   setSelectedStationDetail: (station: GasStation | null) => void;
   selectedFuel: string;
   openNavigation: (station: GasStation) => void;
+  isDark: boolean;
 }
 
 export default function StationModal({
@@ -23,6 +24,7 @@ export default function StationModal({
   setSelectedStationDetail,
   selectedFuel,
   openNavigation,
+  isDark,
 }: StationModalProps) {
   const insets = useSafeAreaInsets();
 
@@ -35,26 +37,57 @@ export default function StationModal({
       statusBarTranslucent={true}
       onRequestClose={() => setSelectedStationDetail(null)}
     >
-      <View style={[styles.modalRoot, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10 }]}>
+      <View
+        style={[
+          styles.modalRoot,
+          {
+            paddingTop: insets.top + 10,
+            paddingBottom: insets.bottom + 10,
+            backgroundColor: isDark ? '#020617' : '#f8fafc',
+          }
+        ]}
+      >
         {/* Modal Header */}
-        <View style={styles.modalHeader}>
+        <View
+          style={[
+            styles.modalHeader,
+            {
+              backgroundColor: isDark ? '#0f172a' : '#ffffff',
+              borderBottomColor: isDark ? '#1e293b' : '#e2e8f0',
+            }
+          ]}
+        >
           <TouchableOpacity 
-            style={styles.modalCloseBtn}
+            style={[styles.modalCloseBtn, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}
             onPress={() => setSelectedStationDetail(null)}
           >
-            <Text style={styles.modalCloseText}>✕ Cerrar</Text>
+            <Text style={[styles.modalCloseText, { color: isDark ? '#f8fafc' : '#0f172a' }]}>✕ Cerrar</Text>
           </TouchableOpacity>
-          <Text style={styles.modalHeaderTitle} numberOfLines={1}>
+          <Text style={[styles.modalHeaderTitle, { color: isDark ? '#f8fafc' : '#0f172a' }]} numberOfLines={1}>
             {selectedStationDetail?.name}
           </Text>
         </View>
 
         {/* Modal Content Scroll */}
         <ScrollView contentContainerStyle={styles.modalScroll}>
-          <View style={styles.modalInfoCard}>
-            <Text style={styles.modalInfoName}>{selectedStationDetail?.name}</Text>
-            <Text style={styles.modalInfoAddress}>📍 {selectedStationDetail?.address}</Text>
-            <Text style={styles.modalInfoLocality}>🏙️ {selectedStationDetail?.locality}</Text>
+          <View
+            style={[
+              styles.modalInfoCard,
+              {
+                backgroundColor: isDark ? '#0f172a' : '#ffffff',
+                borderColor: isDark ? '#1e293b' : '#e2e8f0',
+              }
+            ]}
+          >
+            <Text style={[styles.modalInfoName, { color: isDark ? '#f8fafc' : '#0f172a' }]}>
+              {selectedStationDetail?.name}
+            </Text>
+            <Text style={[styles.modalInfoAddress, { color: isDark ? '#e2e8f0' : '#334155' }]}>
+              📍 {selectedStationDetail?.address}
+            </Text>
+            <Text style={[styles.modalInfoLocality, { color: isDark ? '#94a3b8' : '#475569' }]}>
+              🏙️ {selectedStationDetail?.locality}
+            </Text>
             <Text style={styles.modalInfoDistance}>
               🚗 A {selectedStationDetail?.distance?.toFixed(2)} km de tu ubicación
             </Text>
@@ -62,7 +95,15 @@ export default function StationModal({
 
           {/* Prices List */}
           <Text style={styles.modalSectionTitle}>Precios disponibles</Text>
-          <View style={styles.priceListContainer}>
+          <View
+            style={[
+              styles.priceListContainer,
+              {
+                backgroundColor: isDark ? '#0f172a' : '#ffffff',
+                borderColor: isDark ? '#1e293b' : '#e2e8f0',
+              }
+            ]}
+          >
             {selectedStationDetail && FUEL_TYPES.map(fuel => {
               const price = selectedStationDetail.prices[fuel.value];
               if (price === null) return null;
@@ -73,18 +114,25 @@ export default function StationModal({
                   key={fuel.value} 
                   style={[
                     styles.priceRow, 
+                    { borderBottomColor: isDark ? '#1e293b' : '#e2e8f0' },
                     isSelected && { 
                       borderLeftColor: getPriceLevelStyles(selectedStationDetail.priceLevel).color, 
                       borderLeftWidth: 4, 
-                      backgroundColor: 'rgba(15, 23, 42, 0.4)' 
+                      backgroundColor: isDark ? 'rgba(15, 23, 42, 0.4)' : 'rgba(241, 245, 249, 0.9)' 
                     }
                   ]}
                 >
-                  <Text style={[styles.priceRowLabel, isSelected && { fontWeight: '800', color: '#f8fafc' }]}>
+                  <Text
+                    style={[
+                      styles.priceRowLabel,
+                      { color: isDark ? '#94a3b8' : '#475569' },
+                      isSelected && { fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }
+                    ]}
+                  >
                     {fuel.label} {isSelected && '•'}
                   </Text>
-                  <Text style={[styles.priceRowValue, isSelected && { color: getPriceLevelStyles(selectedStationDetail.priceLevel).color, fontWeight: '900' }]}>
-                    {price.toFixed(3)} <Text style={styles.priceRowUnit}>€/L</Text>
+                  <Text style={[styles.priceRowValue, { color: isDark ? '#f8fafc' : '#0f172a' }, isSelected && { color: getPriceLevelStyles(selectedStationDetail.priceLevel).color, fontWeight: '900' }]}>
+                    {price.toFixed(3)} <Text style={[styles.priceRowUnit, { color: isDark ? '#64748b' : '#475569' }]}>€/L</Text>
                   </Text>
                 </View>
               );

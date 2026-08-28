@@ -8,6 +8,7 @@ interface PreviewCardProps {
   setSelectedStationDetail: (station: GasStation | null) => void;
   triggerHaptic: () => void;
   bottom: any;
+  isDark: boolean;
 }
 
 export default function PreviewCard({
@@ -16,28 +17,38 @@ export default function PreviewCard({
   setSelectedStationDetail,
   triggerHaptic,
   bottom,
+  isDark,
 }: PreviewCardProps) {
   const stylesInfo = getPriceLevelStyles(selectedStationPreview.priceLevel);
 
   return (
-    <Animated.View style={[styles.previewCard, { bottom }]}>
+    <Animated.View
+      style={[
+        styles.previewCard,
+        {
+          bottom,
+          backgroundColor: isDark ? '#0f172a' : '#ffffff',
+          borderColor: isDark ? '#334155' : '#e2e8f0',
+        }
+      ]}
+    >
       <View style={styles.previewHeader}>
-        <Text style={styles.previewName} numberOfLines={1}>
+        <Text style={[styles.previewName, { color: isDark ? '#f8fafc' : '#0f172a' }]} numberOfLines={1}>
           {selectedStationPreview.name}
         </Text>
         <TouchableOpacity 
           onPress={() => setSelectedStationPreview(null)} 
-          style={styles.previewCloseBtn}
+          style={[styles.previewCloseBtn, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}
         >
-          <Text style={styles.previewCloseText}>✕</Text>
+          <Text style={[styles.previewCloseText, { color: isDark ? '#94a3b8' : '#475569' }]}>✕</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.previewAddress} numberOfLines={1}>
+      <Text style={[styles.previewAddress, { color: isDark ? '#94a3b8' : '#475569' }]} numberOfLines={1}>
         {selectedStationPreview.address}
       </Text>
       <View style={styles.previewFooter}>
         <Text style={[styles.previewPrice, { color: stylesInfo.color }]}>
-          {selectedStationPreview.price?.toFixed(3)} <Text style={styles.previewPriceUnit}>€/L</Text>
+          {selectedStationPreview.price?.toFixed(3)} <Text style={[styles.previewPriceUnit, { color: isDark ? '#64748b' : '#64748b' }]}>€/L</Text>
         </Text>
         <TouchableOpacity
           style={styles.previewDetailBtn}

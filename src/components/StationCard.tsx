@@ -13,6 +13,7 @@ interface StationCardProps {
   sheetPosition: React.MutableRefObject<'collapsed' | 'middle' | 'expanded'>;
   SHEET_MID_HEIGHT: number;
   openNavigation: (station: GasStation) => void;
+  isDark: boolean;
 }
 
 export default function StationCard({
@@ -25,12 +26,20 @@ export default function StationCard({
   sheetPosition,
   SHEET_MID_HEIGHT,
   openNavigation,
+  isDark,
 }: StationCardProps) {
   const stylesInfo = getPriceLevelStyles(item.priceLevel);
 
   return (
     <TouchableOpacity
-      style={[styles.card, { borderLeftColor: stylesInfo.color }]}
+      style={[
+        styles.card,
+        {
+          borderLeftColor: stylesInfo.color,
+          backgroundColor: isDark ? 'rgba(15, 23, 42, 0.4)' : '#ffffff',
+          borderBottomColor: isDark ? '#1e293b' : '#e2e8f0',
+        }
+      ]}
       activeOpacity={0.8}
       onPress={() => {
         triggerHaptic();
@@ -48,13 +57,13 @@ export default function StationCard({
             </Text>
           </View>
         </View>
-        <Text style={styles.cardAddress} numberOfLines={1}>
+        <Text style={[styles.cardAddress, { color: isDark ? '#94a3b8' : '#475569' }]} numberOfLines={1}>
           {item.address}
         </Text>
 
         <View style={styles.cardActionsRow}>
           <TouchableOpacity
-            style={styles.cardIconBtn}
+            style={[styles.cardIconBtn, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}
             onPress={() => {
               triggerHaptic();
               centerMap(item.latitude, item.longitude, 16);
@@ -66,7 +75,7 @@ export default function StationCard({
               sheetPosition.current = 'middle';
             }}
           >
-            <Text style={styles.cardIconText}>🗺️ Ver mapa</Text>
+            <Text style={[styles.cardIconText, { color: isDark ? '#e2e8f0' : '#0f172a' }]}>🗺️ Ver mapa</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -75,7 +84,7 @@ export default function StationCard({
         <Text style={[styles.cardPrice, { color: stylesInfo.color }]}>
           {item.price?.toFixed(3)}
         </Text>
-        <Text style={styles.priceUnit}>€/L</Text>
+        <Text style={[styles.priceUnit, { color: isDark ? '#64748b' : '#475569' }]}>€/L</Text>
 
         <TouchableOpacity style={styles.routeBtn} onPress={() => openNavigation(item)}>
           <Text style={styles.routeBtnText}>Ruta</Text>

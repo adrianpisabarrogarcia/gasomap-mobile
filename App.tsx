@@ -9,6 +9,7 @@ import {
   Linking,
   Animated,
   Platform,
+  useColorScheme,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
@@ -32,6 +33,8 @@ import { useAppSettings } from './src/hooks/useAppSettings';
 import { useFilteredStations } from './src/hooks/useFilteredStations';
 
 function AppContent() {
+  const systemScheme = useColorScheme();
+  const isSystemDark = systemScheme === 'dark';
   const insets = useSafeAreaInsets();
   const mapRef = useRef<any>(null);
 
@@ -178,11 +181,11 @@ function AppContent() {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" backgroundColor="transparent" translucent />
+    <View style={[styles.container, { backgroundColor: isSystemDark ? '#020617' : '#f8fafc' }]}>
+      <StatusBar style={isSystemDark ? "light" : "dark"} backgroundColor="transparent" translucent />
 
       {/* Top Status Bar Dark Cover Overlay */}
-      <View style={[styles.statusBarCover, { height: insets.top }]} />
+      <View style={[styles.statusBarCover, { height: insets.top, backgroundColor: isSystemDark ? '#020617' : '#f8fafc' }]} />
 
       {/* Map View */}
       <Map
@@ -209,6 +212,7 @@ function AppContent() {
         showFuelModal={showFuelModal}
         setShowFuelModal={setShowFuelModal}
         triggerHaptic={triggerHaptic}
+        isDark={isSystemDark}
       />
 
       {/* Floating Buttons Group (Theme, Geolocalize, Refresh) */}
@@ -263,34 +267,74 @@ function AppContent() {
           setSelectedStationDetail={setSelectedStationDetail}
           triggerHaptic={triggerHaptic}
           bottom={Animated.add(animatedHeight, 20)}
+          isDark={isSystemDark}
         />
       )}
 
       {/* Sliding Bottom Sheet */}
-      <Animated.View style={[styles.bottomSheet, { height: animatedHeight }]}>
+      <Animated.View
+        style={[
+          styles.bottomSheet,
+          {
+            height: animatedHeight,
+            backgroundColor: isSystemDark ? '#0f172a' : '#ffffff',
+            borderColor: isSystemDark ? '#1e293b' : '#e2e8f0',
+          }
+        ]}
+      >
         {/* Handle bar for dragging */}
-        <View {...panResponder.panHandlers} style={styles.dragHandleContainer}>
-          <View style={styles.dragHandle} />
+        <View style={[styles.dragHandleContainer, { borderBottomColor: isSystemDark ? '#1e293b' : '#e2e8f0' }]} {...panResponder.panHandlers}>
+          <View style={[styles.dragHandle, { backgroundColor: isSystemDark ? '#334155' : '#cbd5e1' }]} />
           <View style={styles.sheetHeaderInfo}>
-            <Text style={styles.sheetTitle}>Gasolineras Cercanas</Text>
+            <Text style={[styles.sheetTitle, { color: isSystemDark ? '#f8fafc' : '#0f172a' }]}>Gasolineras Cercanas</Text>
             <Text style={styles.sheetSub}>{filteredStations.length} encontradas ({searchRadius} km)</Text>
           </View>
         </View>
 
         {/* Sorting controls */}
-        <View style={styles.sortContainer}>
+        <View style={[styles.sortContainer, { backgroundColor: isSystemDark ? '#0b0f19' : '#f1f5f9' }]}>
           <Text style={styles.sortLabel}>Ordenar:</Text>
           <TouchableOpacity 
-            style={[styles.sortBtn, sortBy === 'price' && styles.sortBtnActive]} 
+            style={[
+              styles.sortBtn,
+              {
+                backgroundColor: isSystemDark ? '#0f172a' : '#ffffff',
+                borderColor: isSystemDark ? '#1e293b' : '#cbd5e1',
+              },
+              sortBy === 'price' && styles.sortBtnActive
+            ]} 
             onPress={() => { triggerHaptic(); setSortBy('price'); }}
           >
-            <Text style={[styles.sortBtnText, sortBy === 'price' && styles.sortBtnTextActive]}>Precio</Text>
+            <Text
+              style={[
+                styles.sortBtnText,
+                { color: isSystemDark ? '#64748b' : '#475569' },
+                sortBy === 'price' && styles.sortBtnTextActive
+              ]}
+            >
+              Precio
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.sortBtn, sortBy === 'distance' && styles.sortBtnActive]} 
+            style={[
+              styles.sortBtn,
+              {
+                backgroundColor: isSystemDark ? '#0f172a' : '#ffffff',
+                borderColor: isSystemDark ? '#1e293b' : '#cbd5e1',
+              },
+              sortBy === 'distance' && styles.sortBtnActive
+            ]} 
             onPress={() => { triggerHaptic(); setSortBy('distance'); }}
           >
-            <Text style={[styles.sortBtnText, sortBy === 'distance' && styles.sortBtnTextActive]}>Distancia</Text>
+            <Text
+              style={[
+                styles.sortBtnText,
+                { color: isSystemDark ? '#64748b' : '#475569' },
+                sortBy === 'distance' && styles.sortBtnTextActive
+              ]}
+            >
+              Distancia
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -316,11 +360,12 @@ function AppContent() {
                 sheetPosition={sheetPosition}
                 SHEET_MID_HEIGHT={SHEET_MID_HEIGHT}
                 openNavigation={openNavigation}
+                isDark={isSystemDark}
               />
             )}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No hay resultados en esta zona</Text>
+                <Text style={[styles.emptyText, { color: isSystemDark ? '#94a3b8' : '#334155' }]}>No hay resultados en esta zona</Text>
                 <Text style={styles.emptySub}>Prueba a expandir el radio o a cambiar de ubicación</Text>
               </View>
             }
@@ -334,6 +379,7 @@ function AppContent() {
         setSelectedStationDetail={setSelectedStationDetail}
         selectedFuel={selectedFuel}
         openNavigation={openNavigation}
+        isDark={isSystemDark}
       />
     </View>
   );

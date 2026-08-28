@@ -10,6 +10,7 @@ El proyecto sigue el estándar de [SemVer](https://semver.org/spec/v2.0.0.html) 
 
 ### Añadido
 - **Persistencia de Preferencias de Usuario:** Creado el hook personalizado [`src/hooks/useAppSettings.ts`](file:///Users/apisabarro/dev/gasomap-mobile/src/hooks/useAppSettings.ts) para persistir las configuraciones del usuario en `AsyncStorage`. Se guardan y restauran de forma transparente entre sesiones: el combustible seleccionado, el radio de búsqueda (km), el criterio de ordenación (precio/distancia) y el modo claro/oscuro del mapa, previniendo parpadeos iniciales de carga.
+- **Sincronización con el Tema del Sistema:** Integrado `useColorScheme` en el hook de ajustes para heredar automáticamente el tema del sistema operativo (claro u oscuro) en el primer arranque de la app si el usuario no ha guardado una preferencia manual.
 - **Componente de Tarjeta StationCard:** Creado el componente [`src/components/StationCard.tsx`](file:///Users/apisabarro/dev/gasomap-mobile/src/components/StationCard.tsx) y encapsulados los estilos de la tarjeta de gasolinera en él, eliminando más de 120 líneas de diseño inline y CSS monolítico de App.tsx.
 - **Hook useFilteredStations:** Creado el hook [`src/hooks/useFilteredStations.ts`](file:///Users/apisabarro/dev/gasomap-mobile/src/hooks/useFilteredStations.ts) para centralizar y optimizar la lógica de filtrado por radio, cálculo Haversine de distancias, normalización de niveles de precio y criterios de ordenación usando `useMemo`.
 
@@ -23,6 +24,7 @@ El proyecto sigue el estándar de [SemVer](https://semver.org/spec/v2.0.0.html) 
 ### Cambios de compilación
 - Incrementado el campo `version` a `1.1.0` en `package.json` y `app.json`.
 - Incrementado el entero `versionCode` a `5` en Android (`app.json`).
+- Modificado `userInterfaceStyle` a `automatic` en `app.json` para permitir la detección y sincronización nativa del tema del sistema operativo.
 
 ---
 
