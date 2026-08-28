@@ -121,6 +121,11 @@ function AppContent() {
     initApp();
   }, []);
 
+  // Load gas stations reactively when user position or search radius changes
+  useEffect(() => {
+    loadGasStations(false, currentCoords, searchRadius);
+  }, [currentCoords.latitude, currentCoords.longitude, searchRadius]);
+
   const searchLocation = async () => {
     if (!searchQuery.trim()) return;
     setSearchingLocationLocal(true);
@@ -235,7 +240,7 @@ function AppContent() {
           activeOpacity={0.8}
           onPress={() => {
             triggerHaptic();
-            loadGasStations(true);
+            loadGasStations(true, currentCoords, searchRadius);
           }}
         >
           <Text style={styles.floatingActionText}>🔄</Text>
