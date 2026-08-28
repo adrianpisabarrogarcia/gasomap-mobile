@@ -6,7 +6,7 @@ export function useAppSettings() {
   const [selectedFuel, setSelectedFuel] = useState('Precio Gasolina 95 E5');
   const [searchRadius, setSearchRadius] = useState(5);
   const [sortBy, setSortBy] = useState<SortBy>('price');
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
   // Load settings on mount

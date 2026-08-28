@@ -1,5 +1,4 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Animated } from 'react-native';
 import { GasStation } from '../types';
 import { getPriceLevelStyles } from '../utils/helpers';
 
@@ -8,7 +7,7 @@ interface PreviewCardProps {
   setSelectedStationPreview: (station: GasStation | null) => void;
   setSelectedStationDetail: (station: GasStation | null) => void;
   triggerHaptic: () => void;
-  bottom: number;
+  bottom: any;
 }
 
 export default function PreviewCard({
@@ -21,7 +20,7 @@ export default function PreviewCard({
   const stylesInfo = getPriceLevelStyles(selectedStationPreview.priceLevel);
 
   return (
-    <View style={[styles.previewCard, { bottom }]}>
+    <Animated.View style={[styles.previewCard, { bottom }]}>
       <View style={styles.previewHeader}>
         <Text style={styles.previewName} numberOfLines={1}>
           {selectedStationPreview.name}
@@ -50,7 +49,7 @@ export default function PreviewCard({
           <Text style={styles.previewDetailBtnText}>Ver detalles</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

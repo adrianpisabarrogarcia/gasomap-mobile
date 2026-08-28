@@ -17,21 +17,19 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 // Refactored Imports
 import { GasStation, SortBy } from './src/types';
-import { 
-  calculateDistance, 
-  NOMINATIM_URL, 
-  getPriceLevelStyles,
-} from './src/utils/helpers';
+import { NOMINATIM_URL } from './src/utils/helpers';
 import Header from './src/components/Header';
 import Map from './src/components/Map';
 import PreviewCard from './src/components/PreviewCard';
 import StationModal from './src/components/StationModal';
+import StationCard from './src/components/StationCard';
 
 // Hooks
 import { useGasStations } from './src/hooks/useGasStations';
 import { useUserLocation } from './src/hooks/useUserLocation';
 import { useBottomSheet } from './src/hooks/useBottomSheet';
 import { useAppSettings } from './src/hooks/useAppSettings';
+import { useFilteredStations } from './src/hooks/useFilteredStations';
 
 function AppContent() {
   const insets = useSafeAreaInsets();
@@ -79,7 +77,14 @@ function AppContent() {
     panResponder,
     sheetPosition,
     SHEET_MAX_HEIGHT,
+    SHEET_MID_HEIGHT,
   } = useBottomSheet();
+
+  const buttonsOpacity = animatedHeight.interpolate({
+    inputRange: [SHEET_MID_HEIGHT, SHEET_MID_HEIGHT + 80],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   // App Settings Hook (Persistent)
   const {
@@ -95,7 +100,7 @@ function AppContent() {
   } = useAppSettings();
 
   // Local UI States
-  const [filteredStations, setFilteredStations] = useState<GasStation[]>([]);
+  const filteredStations = useFilteredStations(allStations, currentCoords, selectedFuel, searchRadius, sortBy);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchingLocationLocal, setSearchingLocationLocal] = useState(false);
   const [showFuelModal, setShowFuelModal] = useState(false);
@@ -118,58 +123,6 @@ function AppContent() {
     };
     initApp();
   }, []);
-
-  // Recalculate on filter/coords change
-  useEffect(() => {
-    updateData();
-  }, [allStations, currentCoords, selectedFuel, searchRadius, sortBy]);
-
-  const updateData = () => {
-    if (!allStations.length) return;
-
-    let computed = allStations
-      .map(station => {
-        const price = station.prices[selectedFuel];
-        const distance = calculateDistance(currentCoords.latitude, currentCoords.longitude, station.latitude, station.longitude);
-        return { ...station, price, distance };
-      })
-      .filter(station => station.price !== null && station.distance! <= searchRadius) as GasStation[];
-
-    let minPrice = Infinity;
-    let maxPrice = -Infinity;
-    computed.forEach(s => {
-      if (s.price! < minPrice) minPrice = s.price!;
-      if (s.price! > maxPrice) maxPrice = s.price!;
-    });
-
-    computed = computed.map(s => {
-      const priceRange = maxPrice - minPrice;
-      const factor = priceRange > 0 ? (s.price! - minPrice) / priceRange : 0;
-      
-      let priceLevel: GasStation['priceLevel'] = 'moderate';
-      if (s.price === minPrice && computed.length > 1) {
-        priceLevel = 'cheapest';
-      } else if (s.price === maxPrice && computed.length > 1) {
-        priceLevel = 'most-expensive';
-      } else if (factor < 0.25) {
-        priceLevel = 'economy';
-      } else if (factor >= 0.75) {
-        priceLevel = 'expensive';
-      } else {
-        priceLevel = 'moderate';
-      }
-
-      return { ...s, priceLevel };
-    });
-
-    if (sortBy === 'price') {
-      computed.sort((a, b) => a.price! - b.price!);
-    } else {
-      computed.sort((a, b) => a.distance! - b.distance!);
-    }
-
-    setFilteredStations(computed);
-  };
 
   const searchLocation = async () => {
     if (!searchQuery.trim()) return;
@@ -258,35 +211,49 @@ function AppContent() {
         triggerHaptic={triggerHaptic}
       />
 
-      {/* Floating Theme Toggle Button */}
-      <TouchableOpacity
-        style={[styles.themeFloatingBtn, { bottom: (sheetPosition.current === 'collapsed' ? 175 : sheetPosition.current === 'middle' ? 435 : SHEET_MAX_HEIGHT + 75) }]}
-        onPress={() => {
-          triggerHaptic();
-          setIsDarkMode(!isDarkMode);
-        }}
+      {/* Floating Buttons Group (Theme, Geolocalize, Refresh) */}
+      <Animated.View
+        style={[
+          styles.floatingButtonsContainer,
+          {
+            bottom: Animated.add(animatedHeight, selectedStationPreview ? 140 : 20),
+            opacity: buttonsOpacity,
+          }
+        ]}
       >
-        <Text style={styles.themeFloatingText}>{isDarkMode ? '☀️' : '🌙'}</Text>
-      </TouchableOpacity>
+        {/* Floating Refresh Button */}
+        <TouchableOpacity
+          style={styles.floatingActionBtn}
+          activeOpacity={0.8}
+          onPress={() => {
+            triggerHaptic();
+            loadGasStations(true);
+          }}
+        >
+          <Text style={styles.floatingActionText}>🔄</Text>
+        </TouchableOpacity>
 
-      {/* Floating Geolocalize Button */}
-      <TouchableOpacity
-        style={[styles.geolocateFloatingBtn, { bottom: (sheetPosition.current === 'collapsed' ? 120 : sheetPosition.current === 'middle' ? 380 : SHEET_MAX_HEIGHT + 20) }]}
-        onPress={() => geolocateUser(false)}
-      >
-        <Text style={styles.geolocateFloatingText}>🎯</Text>
-      </TouchableOpacity>
+        {/* Floating Theme Toggle Button */}
+        <TouchableOpacity
+          style={styles.floatingActionBtn}
+          activeOpacity={0.8}
+          onPress={() => {
+            triggerHaptic();
+            setIsDarkMode(!isDarkMode);
+          }}
+        >
+          <Text style={styles.floatingActionText}>{isDarkMode ? '☀️' : '🌙'}</Text>
+        </TouchableOpacity>
 
-      {/* Floating Refresh Button */}
-      <TouchableOpacity
-        style={[styles.refreshFloatingBtn, { bottom: (sheetPosition.current === 'collapsed' ? 230 : sheetPosition.current === 'middle' ? 490 : SHEET_MAX_HEIGHT + 130) }]}
-        onPress={() => {
-          triggerHaptic();
-          loadGasStations(true);
-        }}
-      >
-        <Text style={styles.refreshFloatingText}>🔄</Text>
-      </TouchableOpacity>
+        {/* Floating Geolocalize Button */}
+        <TouchableOpacity
+          style={styles.floatingActionBtn}
+          activeOpacity={0.8}
+          onPress={() => geolocateUser(false)}
+        >
+          <Text style={styles.floatingActionText}>🎯</Text>
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* Floating Preview Card (Map Selection) */}
       {selectedStationPreview && (
@@ -295,7 +262,7 @@ function AppContent() {
           setSelectedStationPreview={setSelectedStationPreview}
           setSelectedStationDetail={setSelectedStationDetail}
           triggerHaptic={triggerHaptic}
-          bottom={sheetPosition.current === 'collapsed' ? 120 : sheetPosition.current === 'middle' ? 380 : SHEET_MAX_HEIGHT + 20}
+          bottom={Animated.add(animatedHeight, 20)}
         />
       )}
 
@@ -338,65 +305,19 @@ function AppContent() {
             data={filteredStations}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => {
-              const stylesInfo = getPriceLevelStyles(item.priceLevel);
-              return (
-                <TouchableOpacity
-                  style={[styles.card, { borderLeftColor: stylesInfo.color }]}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    triggerHaptic();
-                    setSelectedStationDetail(item);
-                  }}
-                >
-                  <View style={styles.cardMain}>
-                    <View style={styles.cardHeader}>
-                      <Text style={[styles.cardName, { color: stylesInfo.color }]} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <View style={[styles.badge, { backgroundColor: stylesInfo.badgeBg }]}>
-                        <Text style={[styles.badgeText, { color: stylesInfo.color }]}>
-                          {stylesInfo.label}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.cardAddress} numberOfLines={1}>{item.address}</Text>
-                    
-                    <View style={styles.cardActionsRow}>
-                      <TouchableOpacity
-                        style={styles.cardIconBtn}
-                        onPress={() => {
-                          triggerHaptic();
-                          centerMap(item.latitude, item.longitude, 16);
-                          setSelectedStationPreview(item);
-                          Animated.spring(animatedHeight, {
-                            toValue: SHEET_MID_HEIGHT,
-                            useNativeDriver: false,
-                          }).start();
-                          sheetPosition.current = 'middle';
-                        }}
-                      >
-                        <Text style={styles.cardIconText}>🗺️ Ver mapa</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardRight}>
-                    <Text style={[styles.cardPrice, { color: stylesInfo.color }]}>
-                      {item.price?.toFixed(3)}
-                    </Text>
-                    <Text style={styles.priceUnit}>€/L</Text>
-                    
-                    <TouchableOpacity 
-                      style={styles.routeBtn}
-                      onPress={() => openNavigation(item)}
-                    >
-                      <Text style={styles.routeBtnText}>Ruta</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
+            renderItem={({ item }) => (
+              <StationCard
+                item={item}
+                triggerHaptic={triggerHaptic}
+                setSelectedStationDetail={setSelectedStationDetail}
+                centerMap={centerMap}
+                setSelectedStationPreview={setSelectedStationPreview}
+                animatedHeight={animatedHeight}
+                sheetPosition={sheetPosition}
+                SHEET_MID_HEIGHT={SHEET_MID_HEIGHT}
+                openNavigation={openNavigation}
+              />
+            )}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No hay resultados en esta zona</Text>
@@ -481,9 +402,14 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 1,
   },
-  geolocateFloatingBtn: {
+  floatingButtonsContainer: {
     position: 'absolute',
     right: 15,
+    flexDirection: 'row',
+    gap: 10,
+    zIndex: 8,
+  },
+  floatingActionBtn: {
     width: 46,
     height: 46,
     borderRadius: 23,
@@ -497,10 +423,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3.84,
     elevation: 5,
-    zIndex: 8,
   },
-  geolocateFloatingText: {
-    fontSize: 20,
+  floatingActionText: {
+    fontSize: 18,
   },
   bottomSheet: {
     position: 'absolute',
@@ -584,76 +509,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 40,
   },
-  card: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-    borderLeftWidth: 3,
-    paddingLeft: 10,
-    marginVertical: 4,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-    borderRadius: 12,
-  },
-  cardMain: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  cardName: {
-    fontSize: 13,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    maxWidth: 160,
-  },
-  badge: {
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  badgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  cardAddress: {
-    color: '#94a3b8',
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  cardRight: {
-    alignItems: 'center',
-    width: 80,
-  },
-  cardPrice: {
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  priceUnit: {
-    color: '#64748b',
-    fontSize: 9,
-    marginTop: -2,
-    marginBottom: 6,
-  },
-  routeBtn: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  routeBtnText: {
-    color: '#020617',
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -682,24 +537,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontWeight: '600',
   },
-  cardActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  cardIconBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  cardIconText: {
-    color: '#e2e8f0',
-    fontSize: 9,
-    fontWeight: '700',
-  },
   statusBarCover: {
     position: 'absolute',
     top: 0,
@@ -707,47 +544,5 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#020617',
     zIndex: 99,
-  },
-  themeFloatingBtn: {
-    position: 'absolute',
-    right: 15,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 8,
-  },
-  themeFloatingText: {
-    fontSize: 18,
-  },
-  refreshFloatingBtn: {
-    position: 'absolute',
-    right: 15,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 8,
-  },
-  refreshFloatingText: {
-    fontSize: 18,
   },
 });
