@@ -83,12 +83,6 @@ function AppContent() {
     SHEET_MID_HEIGHT,
   } = useBottomSheet();
 
-  const buttonsOpacity = animatedHeight.interpolate({
-    inputRange: [SHEET_MID_HEIGHT, SHEET_MID_HEIGHT + 80],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
   // App Settings Hook (Persistent)
   const {
     selectedFuel,
@@ -221,7 +215,6 @@ function AppContent() {
           styles.floatingButtonsContainer,
           {
             bottom: Animated.add(animatedHeight, selectedStationPreview ? 140 : 20),
-            opacity: buttonsOpacity,
           }
         ]}
       >
